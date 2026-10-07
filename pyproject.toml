@@ -19,6 +19,8 @@ build-backend = "hatchling.build"
 
 [tool.ruff]
 line-length = 100
+# Third-party code kept byte-for-byte with upstream.
+extend-exclude = ["vjev/clef_schema.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
