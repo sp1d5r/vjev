@@ -15,7 +15,7 @@ The first benchmark is SnapUGC engagement prediction (ECR).
 | Qwen3-Omni + typed head trainer (video + audio) | Done |
 | Pilot: 10k clips, video + audio | Running |
 | Video-only ablation (same backbone, no audio) | Next |
-| Li24 baseline re-run on our split | Planned |
+| Baselines retrained on our split (VideoLLaMA2-AV, text, CLIP) | Planned |
 | Full run (30.6k clips) | Planned |
 
 ## Results
@@ -33,7 +33,7 @@ A uniform guess over 10 levels has Brier 0.900.
 
 For context, trained models in the VQualA 2025 challenge reach a final score of 0.66 to 0.71 on the official test set.
 Those numbers are not directly comparable, because the official test labels are withheld.
-We will re-run the Li24 baseline on our split for a fair comparison.
+We retrain the baselines on our exact split for a fair comparison. See [`EVALUATION.md`](EVALUATION.md).
 
 Full log of every experiment: [`results/README.md`](results/README.md).
 Live charts in plain language: [W&B report](https://wandb.ai/sp1d5r/vjev/reports/vjev:-can-a-typed-model-predict-video-retention?--VmlldzoxODA3MzM0NQ==) (private).
