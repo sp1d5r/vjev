@@ -7,6 +7,26 @@ They are not comparable to the VQualA 2025 leaderboard, whose test labels are wi
 
 ---
 
+## 2026-10-07 · E002 · Qwen3-Omni + typed head, pilot (running)
+
+**Question:** does training a typed head on an audio-native backbone beat zero-shot, and by how much?
+
+**Setup**
+
+- Backbone: Qwen3-Omni-30B-A3B thinker, bf16, talker disabled.
+- Input: first 16 s at 2 fps (up to 32 frames) plus the clip's 16 kHz audio, interleaved (`use_audio_in_video=True`), plus title and description.
+- Trainable: LoRA r=64, alpha=128 on text attention (q, k, v, o), plus a new joint schema head.
+- Loss: CE (label smoothing 0.05) + 1.0 x Brier + 1.0 x ordinal EMD.
+- Optimiser: AdamW, LR 1e-4 (LoRA) and 3e-4 (head), 8-clip accumulation, warmup then cosine.
+- Data: 10,000 train clips, 1 epoch, eval on 500 val clips every 200 steps.
+- Hardware: 1x H200 on Modal.
+
+**Throughput:** about 2,500 clips per hour, measured on a 160-clip run.
+
+**Results:** pending.
+
+---
+
 ## 2026-10-07 · E001 · Zero-shot Clef-flash
 
 **Question:** how well does Clef-flash rank engagement with no training, and does video help?

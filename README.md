@@ -11,11 +11,12 @@ The first benchmark is SnapUGC engagement prediction (ECR).
 |---|---|
 | Data pipeline (34,081 SnapUGC clips on Modal) | Done |
 | Zero-shot Clef-flash baseline | Done |
-| Fast video decoding | Next |
-| LoRA + typed head training | Next |
+| Preprocessing (16 s at 2 fps + 16 kHz audio per clip) | Done |
+| Qwen3-Omni + typed head trainer (video + audio) | Done |
+| Pilot: 10k clips, video + audio | Running |
+| Video-only ablation (same backbone, no audio) | Next |
 | Li24 baseline re-run on our split | Planned |
-| First sweep (10k-clip subset) | Planned |
-| Audio-native backbone (Qwen3-Omni-30B-A3B) | Planned |
+| Full run (30.6k clips) | Planned |
 
 ## Results
 
@@ -49,19 +50,20 @@ Runs: W&B project `sp1d5r/vjev`.
 
 ```mermaid
 flowchart LR
-  V[Video clip] --> D[Frame decoder<br/>1 fps, max 16 frames]
-  T[Title + description] --> S[State]
-  D --> M[Qwen3.5 backbone<br/>+ LoRA]
-  S --> M
-  Q[Typed questions<br/>score / choice / noul] --> M
-  M --> H[Joint schema head<br/>one logit per option]
-  H --> P[Probabilities<br/>+ expected score]
-  P --> E[Metrics<br/>SROCC, PLCC, Brier, ECE]
+  V[Video clip] --> P[Preprocess once<br/>first 16 s, 2 fps<br/>+ 16 kHz audio]
+  P --> O[Qwen3-Omni-30B-A3B thinker<br/>video + audio interleaved<br/>+ LoRA on text attention]
+  T[Title + description] --> O
+  Q[Typed questions<br/>score / choice / noul] --> O
+  O --> H[Joint schema head<br/>one logit per option]
+  H --> L[Loss: CE + Brier + ordinal EMD]
+  H --> E[Metrics<br/>SROCC, PLCC, Brier, ECE]
   E --> W[(W&B)]
 ```
 
-The backbone and head start from [Cloudflare Clef-flash](https://huggingface.co/Cloudflare/clef-flash).
-Training follows the Clef recipe: LoRA plus the head, with label-smoothed cross-entropy and a Brier term.
+The backbone is [Qwen3-Omni-30B-A3B](https://huggingface.co/Qwen/Qwen3-Omni-30B-A3B-Instruct) (Apache-2.0, 3B active parameters).
+It reads video frames and the clip's audio on one interleaved timeline.
+The head is Cloudflare's [Clef](https://huggingface.co/Cloudflare/clef-flash) joint schema head, trained from scratch on this backbone.
+Training follows the Clef recipe: LoRA plus the head, with label-smoothed cross-entropy, a Brier term, and an ordinal term for `score` questions.
 ECR is asked as a 10-level `score` question.
 The prediction is the probability-weighted score.
 
@@ -99,10 +101,14 @@ uv run modal run vjev/data.py::build_split
 ## Experiments
 
 ```sh
-uv run modal run vjev/baseline.py --split test --limit 1736             # zero-shot, video + text
+uv run modal run vjev/baseline.py --split test --limit 1736             # zero-shot Clef-flash, video + text
 uv run modal run vjev/baseline.py --split test --limit 1736 --no-video  # text only
-uv run modal run vjev/baseline.py --split test --limit 1736 --no-text   # video only
+uv run modal run vjev/preprocess.py::preprocess_all                     # decode clips once
+uv run modal run --detach vjev/train.py --train-limit 10000 --val-limit 500 --eval-every 200
+uv run modal run --detach vjev/train.py --no-audio ...                  # video-only ablation
 ```
+
+Training runs on one H200 at about 2,500 clips per hour (about $1.80 per 1,000 clips).
 
 ## Metrics
 
