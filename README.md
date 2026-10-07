@@ -37,7 +37,8 @@ We will re-run the Li24 baseline on our split for a fair comparison.
 
 Full log of every experiment: [`results/README.md`](results/README.md).
 Live charts in plain language: [W&B report](https://wandb.ai/sp1d5r/vjev/reports/vjev:-can-a-typed-model-predict-video-retention?--VmlldzoxODA3MzM0NQ==) (private).
-Rebuild it with `uv run python scripts/wandb_report.py`.
+Runs page in plain language: ["Plain language" view](https://wandb.ai/sp1d5r/vjev?nw=hon9b3fyzh6) (private).
+Rebuild them with `uv run python scripts/wandb_report.py` and `uv run python scripts/wandb_workspace.py`.
 
 ## Findings so far
 
