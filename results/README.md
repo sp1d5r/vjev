@@ -23,6 +23,15 @@ They are not comparable to the VQualA 2025 leaderboard, whose test labels are wi
 
 **Throughput:** about 2,500 clips per hour, measured on a 160-clip run.
 
+**Success criteria (set before results):**
+
+| Outcome | Val final | Meaning |
+|---|---|---|
+| No | ≤ 0.25 | Training barely helps over zero-shot. Rethink inputs or backbone. |
+| Yes, weakly | 0.25 to 0.50 | Real signal. Tune and scale. |
+| Yes | ≥ 0.50 | In the range of prior trained models. |
+| Strong | ≥ Li24 re-run on our split | Competitive with published work. |
+
 **Results:** pending.
 
 ---
