@@ -136,7 +136,11 @@ def train(cfg: dict) -> dict:
         return 0.5 * (1 + math.cos(math.pi * (step - warmup) / max(1, total_steps - warmup)))
 
     sched = torch.optim.lr_scheduler.LambdaLR(opt, lr_scale)
-    run = wandb.init(project="vjev", job_type="train", name=cfg["run_name"],
+    notes = (f"Qwen3-Omni with {'video and audio' if cfg['audio'] else 'video only (no audio)'}, "
+             f"typed head trained from scratch, {len(train_recs):,} training clips, "
+             f"LoRA rank {cfg['lora_r']}. Checked on {len(val_recs)} held-out clips "
+             f"every {cfg['eval_every']} steps.")
+    run = wandb.init(project="vjev", job_type="train", name=cfg["run_name"], notes=notes,
                      config=cfg | {"train_clips": len(train_recs), "val_clips": len(val_recs),
                                    "total_steps": total_steps,
                                    "lora_params": sum(p.numel() for p in lora),

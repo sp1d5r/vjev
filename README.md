@@ -36,7 +36,8 @@ Those numbers are not directly comparable, because the official test labels are 
 We will re-run the Li24 baseline on our split for a fair comparison.
 
 Full log of every experiment: [`results/README.md`](results/README.md).
-Runs: W&B project `sp1d5r/vjev`.
+Live charts in plain language: [W&B report](https://wandb.ai/sp1d5r/vjev/reports/vjev:-can-a-typed-model-predict-video-retention?--VmlldzoxODA3MzM0NQ==) (private).
+Rebuild it with `uv run python scripts/wandb_report.py`.
 
 ## Findings so far
 
