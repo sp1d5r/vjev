@@ -1,0 +1,24 @@
+[project]
+name = "vjev"
+version = "0.1.0"
+description = "Video Jev: a typed, calibrated decision model for video"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+dependencies = [
+    "modal>=1.0",
+    "numpy>=2.0",
+    "scipy>=1.14",
+]
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
