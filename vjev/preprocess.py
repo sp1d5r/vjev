@@ -4,7 +4,7 @@ Training reads these small files instead of decoding mp4 on the GPU box.
 Window: the first WINDOW_S seconds at FPS frames per second. ECR is about the first
 5 seconds, so the start of the clip carries most of the signal.
 
-    modal run vjev/preprocess.py
+    modal run vjev/preprocess.py::preprocess_all
 """
 
 from __future__ import annotations
@@ -100,7 +100,7 @@ def run_shard(recs: list[dict]) -> dict:
 
 
 @app.local_entrypoint()
-def main(limit: int = 0):
+def preprocess_all(limit: int = 0):
     import modal
 
     vol = modal.Volume.from_name("vjev-snapugc")

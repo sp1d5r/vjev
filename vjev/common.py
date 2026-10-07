@@ -21,7 +21,7 @@ cpu_image = (
     .add_local_python_source("vjev")
 )
 
-gpu_image = (
+_gpu_base = (
     modal.Image.debian_slim(python_version="3.12")
     .apt_install("ffmpeg")
     # Versions from the Clef-flash model card ("tested with torch 2.11 and transformers 5.10.2").
@@ -39,5 +39,7 @@ gpu_image = (
         "torchvision",
     )
     .env({"HF_HOME": HF, "HF_HUB_ENABLE_HF_TRANSFER": "1"})
-    .add_local_python_source("vjev")
 )
+# Local source goes last, so code edits never trigger an image rebuild.
+gpu_image = _gpu_base.add_local_python_source("vjev")
+train_image = _gpu_base.uv_pip_install("peft").add_local_python_source("vjev")
