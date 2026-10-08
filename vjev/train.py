@@ -157,7 +157,7 @@ def train(cfg: dict) -> dict:
             out = typed_loss(net(enc)[0], level, cfg["smoothing"], cfg["brier_w"], cfg["emd_w"])
             (out["loss"] / cfg["accum"]).backward()
             for k in ("loss", "ce", "brier", "emd"):
-                window[k] += float(out[k])
+                window[k] += out[k].detach().item()
             window["n"] += 1
             micro += 1
             if micro % cfg["accum"]:
