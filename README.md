@@ -13,17 +13,27 @@ The first benchmark is SnapUGC engagement prediction (ECR).
 | Zero-shot Clef-flash baseline | Done |
 | Preprocessing (16 s at 2 fps + 16 kHz audio per clip) | Done |
 | Qwen3-Omni + typed head trainer (video + audio) | Done |
-| Pilot: 10k clips, video + audio | Running |
+| Pilot: 10k clips, video + audio | Done: val final 0.654 |
 | Video-only ablation (same backbone, no audio) | Next |
 | Baselines retrained on our split (VideoLLaMA2-AV, text, CLIP) | Planned |
 | Full run (30.6k clips) | Planned |
 
 ## Results
 
-Test split: 1,736 clips.
 Higher SROCC, PLCC and Final is better.
 Lower Brier and ECE is better.
 A uniform guess over 10 levels has Brier 0.900.
+
+### Trained (val split, 500 clips)
+
+| Model | Training clips | Input | SROCC | PLCC | Final | Brier | ECE |
+|---|---|---|---|---|---|---|---|
+| Qwen3-Omni + typed head | 10,000 | video + audio + text | 0.655 | 0.652 | **0.654** | 0.839 | 0.035 |
+
+This is a val number from one seed, and val chose the checkpoint.
+The test split stays untouched until the final model.
+
+### Zero-shot (test split, 1,736 clips)
 
 | Model | Trained | Input | SROCC | PLCC | Final | Brier | ECE |
 |---|---|---|---|---|---|---|---|
@@ -42,11 +52,13 @@ Rebuild them with `uv run python scripts/wandb_report.py` and `uv run python scr
 
 ## Findings so far
 
-1. Zero-shot Clef-flash barely ranks engagement (final 0.13 to 0.17).
-2. Video does not help without training. The video runs predict close to uniform.
-3. Text only is the most confident but badly calibrated (ECE 0.28).
-4. Only 32% of SnapUGC videos are still downloadable, and low-engagement videos are deleted more often. Mean ECR is 0.50 over all labels and 0.47 over the clips we have.
-5. Video decoding (about 620 ms per clip) is slower than the model forward pass (about 190 ms). It must be fixed before training.
+1. A typed head on Qwen3-Omni, trained on 10,000 clips with audio, reaches val final 0.654. That passes our pre-set bar of 0.50.
+2. The trained model stays calibrated (ECE 0.035) while it becomes more decisive.
+3. Zero-shot Clef-flash barely ranks engagement (final 0.13 to 0.17).
+4. Video does not help without training. The video runs predict close to uniform.
+5. Text only is the most confident but badly calibrated (ECE 0.28).
+6. Only 32% of SnapUGC videos are still downloadable, and low-engagement videos are deleted more often. Mean ECR is 0.50 over all labels and 0.47 over the clips we have.
+7. Decoding video on the fly was 3.5x slower than the forward pass, so we decode every clip once up front.
 
 ## How it works
 
@@ -110,7 +122,7 @@ uv run modal run --detach vjev/train.py --train-limit 10000 --val-limit 500 --ev
 uv run modal run --detach vjev/train.py --no-audio ...                  # video-only ablation
 ```
 
-Training runs on one H200 at about 2,500 clips per hour (about $1.80 per 1,000 clips).
+Training runs on one H200 at about 2,860 clips per hour (about $1.70 per 1,000 clips).
 
 ## Metrics
 

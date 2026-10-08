@@ -7,7 +7,7 @@ They are not comparable to the VQualA 2025 leaderboard, whose test labels are wi
 
 ---
 
-## 2026-10-07 · E002 · Qwen3-Omni + typed head, pilot (running)
+## 2026-10-08 · E002 · Qwen3-Omni + typed head, pilot
 
 **Question:** does training a typed head on an audio-native backbone beat zero-shot, and by how much?
 
@@ -21,7 +21,7 @@ They are not comparable to the VQualA 2025 leaderboard, whose test labels are wi
 - Data: 10,000 train clips, 1 epoch, eval on 500 val clips every 200 steps.
 - Hardware: 1x H200 on Modal.
 
-**Throughput:** about 2,500 clips per hour, measured on a 160-clip run.
+**Throughput:** about 2,860 clips per hour over the full run (3.55 h for 10,000 clips).
 
 **Success criteria (set before results):**
 
@@ -32,7 +32,40 @@ They are not comparable to the VQualA 2025 leaderboard, whose test labels are wi
 | Yes | ≥ 0.50 | In the range of prior trained models. |
 | Strong | ≥ Li24 re-run on our split | Competitive with published work. |
 
-**Results:** pending.
+**Results** (val, 500 clips, 1 seed)
+
+| Step | SROCC | PLCC | Final | Brier | ECE | Level acc | Spread (levels) |
+|---|---|---|---|---|---|---|---|
+| 200 | 0.490 | 0.500 | 0.495 | 0.894 | 0.002 | 0.116 | 0.15 |
+| 400 | 0.548 | 0.515 | 0.532 | 0.874 | 0.038 | 0.188 | 0.95 |
+| 600 | 0.523 | 0.528 | 0.525 | 0.884 | 0.022 | 0.132 | 0.48 |
+| 800 | 0.634 | 0.630 | 0.632 | 0.856 | 0.029 | 0.182 | 1.44 |
+| 1000 | 0.653 | 0.648 | 0.650 | 0.843 | 0.029 | 0.222 | 1.69 |
+| 1200 | 0.655 | 0.652 | 0.653 | 0.839 | 0.031 | 0.232 | 1.73 |
+| 1250 (end) | **0.655** | **0.652** | **0.654** | **0.839** | 0.035 | **0.236** | 1.73 |
+
+Forward pass: about 290 ms per clip (p50, batch size 1, H200).
+
+**Verdict against the success criteria: Yes (val final 0.654, bar is 0.50).**
+
+**What we learned**
+
+- Training works. Val final went from 0.13 to 0.17 (zero-shot Clef-flash, test) to 0.65 after 10,000 clips.
+- The model ranks well before it is confident. At step 200 it already ranks at 0.50, but its spread is only 0.15 levels, so its probabilities stay near uniform.
+- Brier fell from 0.894 to 0.839, so the probabilities beat a blind guess (0.900), but only modestly. Retention is noisy, and a 10-level answer is hard to get exactly right.
+- Calibration stays good (ECE 0.03 to 0.04) while the model becomes more decisive.
+- The curve flattens after step 1000, at the end of the cosine schedule. More data, not more steps on this data, is the next lever.
+
+**Caveats**
+
+- This is val, not test. Val was used to choose the checkpoint, so the number is slightly optimistic.
+- With n=500, the standard error of SROCC is about 0.03.
+- One seed only.
+- The 2025 challenge models scored 0.66 to 0.71 on a different test set. We cannot claim parity until the baselines are retrained on our split.
+
+**Cost:** about $17 (3.55 h on one H200).
+
+**W&B run:** `pilot-omni-av-10k`. Checkpoint: `/data/ckpt/pilot-omni-av-10k/best.pt` on the `vjev-snapugc` volume.
 
 ---
 
