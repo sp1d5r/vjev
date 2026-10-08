@@ -31,7 +31,8 @@ RUN_NOTES = {
     "tput-omni-av": "Speed test: 20 steps on 160 clips. Measured about 2,500 clips per hour.",
     "pilot-omni-av-10k":
         "Pilot. Qwen3-Omni with video and audio, typed head trained from scratch, "
-        "10,000 training clips, checked on 500 held-out clips every 200 steps.",
+        "10,000 training clips, checked on 500 held-out clips every 200 steps. "
+        "Result: final 0.654, passing the 0.50 bar. Probabilities stay honest (ECE 0.035).",
 }
 
 TRAIN_RUNS = "pilot|omni-"  # name filter for real training runs
@@ -58,8 +59,9 @@ def blocks() -> list:
              "It answers one typed question with 10 levels, from almost everyone swipes away "
              "to almost everyone keeps watching. Each level gets a probability."),
         wr.CalloutBlock(text=[
-            ("Current answer: zero-shot models cannot do it (final score 0.13 to 0.17). "
-            "The trained pilot is running. Its curve is in the first chart below.")]),
+            ("Current answer: yes. Zero-shot models cannot do it (final score 0.13 to 0.17). "
+            "After training on 10,000 clips with audio, the pilot scores 0.654 on held-out "
+            "clips, above our 0.50 bar. Its curve is in the first chart below.")]),
         wr.H2("How to read the numbers"),
         wr.UnorderedList(items=[
             ("Final score: how well the model ranks clips by retention, from 0 (random) to 1 "
@@ -156,7 +158,8 @@ def main() -> None:
     title = "vjev: can a typed model predict video retention?"
     desc = "Plain-language results for the video Jev project. Rebuilt by scripts/wandb_report.py."
     if URL_FILE.exists():
-        report = wr.Report.from_url(URL_FILE.read_text().strip())
+        # The "?" in the title ends up raw in the URL, which hides the report id from the parser.
+        report = wr.Report.from_url(URL_FILE.read_text().strip().replace("?", "%3F"))
         report.title, report.description, report.blocks = title, desc, blocks()
     else:
         report = wr.Report(project=PROJECT, entity=ENTITY, title=title, description=desc,
