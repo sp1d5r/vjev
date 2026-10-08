@@ -165,7 +165,9 @@ def fit_all_remote(calibrate: bool = False) -> list[dict]:
     edges = np.array(json.loads((root / "index" / "meta.json").read_text())["level_edges"])
     feats = {}
     for f in sorted((root / FEATS).glob("shard_*.npz")):
-        z = np.load(f)
+        # Read each array once. Indexing z[k] per row re-reads it, and every row view then
+        # keeps its own full copy alive (this ran out of 64 GB).
+        z = dict(np.load(f))
         for j, vid in enumerate(z["ids"]):
             feats[str(vid)] = {k: z[k][j] for k in ("text", "clip_first", "clip_mean")}
 
