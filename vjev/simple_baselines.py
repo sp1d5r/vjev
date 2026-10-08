@@ -149,13 +149,15 @@ def _fit_one(kind: str, xs: dict, ys: dict, levels: dict, val500: np.ndarray,
             m["reg_srocc"], m["reg_plcc"] = srocc(r, ys["val"][mask]), plcc(r, ys["val"][mask])
             m["reg_final"] = (m["reg_srocc"] + m["reg_plcc"]) / 2
         out[tag] = m
+        if tag == "val":
+            out["_val_preds"] = (expected, probs)
     return out
 
 
 
 @app.function(image=baseline_image, cpu=16, memory=65536, timeout=7200,
               volumes={DATA: data_vol}, secrets=[modal.Secret.from_name("wandb")])
-def fit_all_remote(calibrate: bool = False) -> list[dict]:
+def fit_all_remote(calibrate: bool = False, log: bool = True) -> list[dict]:
     import wandb
 
     from vjev.metrics import ecr_level
@@ -194,21 +196,29 @@ def fit_all_remote(calibrate: bool = False) -> list[dict]:
         xs = {s: x(s, keys) for s in ("train", "val")}
         name = f"{name}-ts" if calibrate else name
         res = {"model": name, **_fit_one(kind, xs, ys, levels, val500, edges, calibrate)}
+        expected, probs = res.pop("_val_preds")
+        (root / "preds").mkdir(exist_ok=True)
+        (root / "preds" / f"baseline-{name}-val.jsonl").write_text("".join(
+            json.dumps({"id": r["id"], "ecr": r["ecr"], "expected": float(e), "probs": p.tolist()})
+            + "\n" for r, e, p in zip(recs["val"], expected, probs, strict=True)))
+        data_vol.commit()
         res["n_train"] = len(ys["train"])
         results.append(res)
+        print(json.dumps(res), flush=True)
+        if not log:
+            continue
         run = wandb.init(project="vjev", entity="sp1d5r", name=f"baseline-{name}",
                          config={"model": name, "features": keys, "kind": kind,
                                  "calibrate": calibrate}, reinit=True)
         run.summary.update({f"val/{k}": v for k, v in res["val500"].items()})
         run.summary.update({f"val_full/{k}": v for k, v in res["val"].items()})
         run.finish()
-        print(json.dumps(res), flush=True)
     return results
 
 
 @app.local_entrypoint()
-def fit_all(calibrate: bool = False):
-    results = fit_all_remote.remote(calibrate)
+def fit_all(calibrate: bool = False, log: bool = True):
+    results = fit_all_remote.remote(calibrate, log)
     name = "simple_baselines_val_ts.json" if calibrate else "simple_baselines_val.json"
     out = pathlib.Path(__file__).resolve().parent.parent / "results" / name
     out.write_text(json.dumps(results, indent=2) + "\n")
