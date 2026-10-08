@@ -151,13 +151,18 @@ def _fit_one(kind: str, xs: dict, ys: dict, levels: dict, val500: np.ndarray,
         out[tag] = m
         if tag == "val":
             out["_val_preds"] = (expected, probs)
+    if "test" in xs:
+        probs = _scale(cls.predict_proba(xs["test"]), t)
+        out["_test_preds"] = (probs @ np.arange(probs.shape[1]), probs)
     return out
 
 
 
 @app.function(image=baseline_image, cpu=16, memory=65536, timeout=7200,
               volumes={DATA: data_vol}, secrets=[modal.Secret.from_name("wandb")])
-def fit_all_remote(calibrate: bool = False, log: bool = True) -> list[dict]:
+def fit_all_remote(calibrate: bool = False, log: bool = True, test: bool = False) -> list[dict]:
+    """With test, also write test predictions (once; refuses to overwrite). Fits are seeded,
+    so the models match the val-only fit. No test metrics are computed or logged here."""
     import wandb
 
     from vjev.metrics import ecr_level
@@ -174,7 +179,8 @@ def fit_all_remote(calibrate: bool = False, log: bool = True) -> list[dict]:
             feats[str(vid)] = {k: z[k][j] for k in ("text", "clip_first", "clip_mean")}
 
     recs, ys, levels = {}, {}, {}
-    for split in ("train", "val"):
+    splits = ("train", "val", "test") if test else ("train", "val")
+    for split in splits:
         lines = (root / "index" / f"{split}.jsonl").read_text().splitlines()
         recs[split] = [r for r in map(json.loads, lines) if r["id"] in feats]
         ys[split] = np.array([r["ecr"] for r in recs[split]])
@@ -193,14 +199,23 @@ def fit_all_remote(calibrate: bool = False, log: bool = True) -> list[dict]:
     ]
     results = []
     for name, kind, keys in setups:
-        xs = {s: x(s, keys) for s in ("train", "val")}
+        xs = {s: x(s, keys) for s in splits}
         name = f"{name}-ts" if calibrate else name
+        test_out = root / "preds" / f"baseline-{name}-test.jsonl"
+        if test and test_out.exists():
+            raise RuntimeError(f"{test_out} exists; test is scored once per final model")
         res = {"model": name, **_fit_one(kind, xs, ys, levels, val500, edges, calibrate)}
         expected, probs = res.pop("_val_preds")
         (root / "preds").mkdir(exist_ok=True)
         (root / "preds" / f"baseline-{name}-val.jsonl").write_text("".join(
             json.dumps({"id": r["id"], "ecr": r["ecr"], "expected": float(e), "probs": p.tolist()})
             + "\n" for r, e, p in zip(recs["val"], expected, probs, strict=True)))
+        if test:
+            expected, probs = res.pop("_test_preds")
+            test_out.write_text("".join(
+                json.dumps({"id": r["id"], "ecr": r["ecr"], "expected": float(e),
+                            "probs": p.tolist()})
+                + "\n" for r, e, p in zip(recs["test"], expected, probs, strict=True)))
         data_vol.commit()
         res["n_train"] = len(ys["train"])
         results.append(res)
@@ -217,8 +232,11 @@ def fit_all_remote(calibrate: bool = False, log: bool = True) -> list[dict]:
 
 
 @app.local_entrypoint()
-def fit_all(calibrate: bool = False, log: bool = True):
-    results = fit_all_remote.remote(calibrate, log)
+def fit_all(calibrate: bool = False, log: bool = True, test: bool = False):
+    results = fit_all_remote.remote(calibrate, log and not test, test)
+    if test:
+        print("wrote test predictions to /data/preds/baseline-*-test.jsonl")
+        return
     name = "simple_baselines_val_ts.json" if calibrate else "simple_baselines_val.json"
     out = pathlib.Path(__file__).resolve().parent.parent / "results" / name
     out.write_text(json.dumps(results, indent=2) + "\n")
