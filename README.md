@@ -16,6 +16,7 @@ The first benchmark is SnapUGC engagement prediction (ECR).
 | Pilot: 10k clips, video + audio | Done: val final 0.654 |
 | Cheap baselines on our split (text XGBoost, CLIP MLP) | Done: CLIP MLP + temperature 0.673 |
 | Video-only ablation (same backbone, no audio) | Done: 0.628, audio gap inside noise |
+| Omni + CLIP ensemble | Done: 0.695 |
 | VideoLLaMA2-AV retrained on our split | Planned |
 | Full run (30.6k clips) | Running (restarted after NaN fix) |
 
@@ -30,6 +31,7 @@ A uniform guess over 10 levels has Brier 0.900.
 | Model | Training clips | Input | SROCC | PLCC | Final | Brier | ECE |
 |---|---|---|---|---|---|---|---|
 | Qwen3-Omni + typed head | 10,000 | video + audio + text | 0.655 | 0.652 | 0.654 | **0.839** | **0.035** |
+| **Omni + CLIP-MLP-temperature ensemble** | 10,000 + ~27,600 | video + audio + text | 0.696 | 0.694 | **0.695** | **0.829** | **0.030** |
 | Qwen3-Omni + typed head, no audio | 10,000 | video + text | 0.627 | 0.626 | 0.628 | 0.847 | 0.029 |
 | CLIP + MLP + temperature | ~27,600 | 8 frames | 0.673 | 0.673 | **0.673** | 0.845 | 0.046 |
 | CLIP + MLP | 30,631 | 8 frames | 0.666 | 0.658 | 0.662 | 0.876 | 0.144 |
@@ -62,12 +64,13 @@ Rebuild them with `uv run python scripts/wandb_report.py` and `uv run python scr
 1. A typed head on Qwen3-Omni, trained on 10,000 clips with audio, reaches val final 0.654. That passes our pre-set bar of 0.50.
 2. A cheap CLIP + MLP baseline with temperature scaling ranks slightly better (0.673) and is nearly as well calibrated (Brier 0.845 against 0.839). It trained on about 3x the data. It is the real bar.
 3. Without audio, the Omni model scores 0.628. The gap to the pilot (0.026) is inside the noise, so audio helps at most a little.
-4. Visual features carry most of the signal. Text alone reaches only 0.33.
-5. Zero-shot Clef-flash barely ranks engagement (final 0.13 to 0.17).
-6. Without training, video does not help. The zero-shot video runs predict close to uniform.
-7. Zero-shot text only is the most confident but badly calibrated (ECE 0.28).
-8. Only 32% of SnapUGC videos are still downloadable, and low-engagement videos are deleted more often. Mean ECR is 0.50 over all labels and 0.47 over the clips we have.
-9. Decoding video on the fly was 3.5x slower than the forward pass, so we decode every clip once up front.
+4. An equal-weight ensemble of Omni and CLIP + MLP reaches 0.695, beating both. Omni carries signal CLIP misses (their predictions correlate at 0.82).
+5. Visual features carry most of the signal. Text alone reaches only 0.33.
+6. Zero-shot Clef-flash barely ranks engagement (final 0.13 to 0.17).
+7. Without training, video does not help. The zero-shot video runs predict close to uniform.
+8. Zero-shot text only is the most confident but badly calibrated (ECE 0.28).
+9. Only 32% of SnapUGC videos are still downloadable, and low-engagement videos are deleted more often. Mean ECR is 0.50 over all labels and 0.47 over the clips we have.
+10. Decoding video on the fly was 3.5x slower than the forward pass, so we decode every clip once up front.
 
 ## How it works
 

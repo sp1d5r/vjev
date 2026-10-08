@@ -7,6 +7,46 @@ They are not comparable to the VQualA 2025 leaderboard, whose test labels are wi
 
 ---
 
+## 2026-10-08 · E005 · Ensemble of Omni and CLIP
+
+**Question:** does the Omni model know something CLIP + MLP does not?
+
+**Setup**
+
+- Inputs: the E002 pilot checkpoint, re-scored on the same 500 val clips (`vjev/predict.py`), and CLIP + MLP with temperature scaling (E003).
+- Re-scoring with the fp32 head gives 0.653, matching the saved 0.654, so the checkpoint and predict path are sound.
+- Ensemble: equal weights, fixed before looking. Ranking uses the mean of each model's z-scored expected level. Probabilities use the mean of the two distributions. Nothing is fit on val.
+- Paired bootstrap over clips, 2,000 resamples.
+
+**Results** (500 val clips)
+
+| Model | Final | SROCC | PLCC | Brier | ECE |
+|---|---|---|---|---|---|
+| Omni pilot (E002) | 0.653 | 0.654 | 0.652 | 0.838 | 0.030 |
+| CLIP + MLP + temperature | 0.673 | 0.673 | 0.673 | 0.845 | 0.046 |
+| **Omni + CLIP ensemble** | **0.695** | **0.696** | **0.694** | **0.829** | **0.030** |
+| Omni + CLIP-and-text ensemble | 0.697 | 0.698 | 0.695 | 0.832 | 0.052 |
+
+| Paired difference in final | Mean | 95% CI |
+|---|---|---|
+| Ensemble - CLIP | +0.022 | -0.001 to +0.045 |
+| Ensemble - Omni | +0.041 | +0.020 to +0.064 |
+| CLIP - Omni | +0.019 | -0.025 to +0.063 |
+
+The two models' predictions correlate at 0.82.
+
+**What we learned**
+
+- The Omni model carries signal CLIP does not. Together they beat both, on ranking and on Brier.
+- The gain over CLIP alone is borderline at n=500 (the interval just touches 0). A larger eval set would settle it.
+- On their own, Omni and CLIP are not distinguishable at this sample size.
+
+**Cost:** about $2 (one H200 re-score).
+
+**Raw data:** [`ensemble_val500.json`](ensemble_val500.json). Script: `scripts/ensemble.py`.
+
+---
+
 ## 2026-10-08 · E004 · Video only, no audio (ablation)
 
 **Question:** does audio help?

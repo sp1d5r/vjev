@@ -1,0 +1,52 @@
+{
+  "n": 500,
+  "split": "val500 (same clips as E002-E004)",
+  "rows": {
+    "omni_pilot": {
+      "final": 0.653,
+      "srocc": 0.654,
+      "plcc": 0.652,
+      "brier": 0.838,
+      "ece": 0.03
+    },
+    "clip_mlp_ts": {
+      "final": 0.673,
+      "srocc": 0.673,
+      "plcc": 0.673,
+      "brier": 0.845,
+      "ece": 0.046
+    },
+    "ensemble_omni_clip_ts": {
+      "final": 0.695,
+      "srocc": 0.696,
+      "plcc": 0.694,
+      "brier": 0.829,
+      "ece": 0.03
+    },
+    "ensemble_omni_cliptext_ts": {
+      "final": 0.697,
+      "srocc": 0.698,
+      "plcc": 0.695,
+      "brier": 0.832,
+      "ece": 0.052
+    }
+  },
+  "prediction_correlation_omni_clip": 0.824,
+  "paired_bootstrap_2000": {
+    "ens_minus_clip": [
+      0.022,
+      -0.001,
+      0.045
+    ],
+    "ens_minus_omni": [
+      0.041,
+      0.02,
+      0.064
+    ],
+    "clip_minus_omni": [
+      0.019,
+      -0.025,
+      0.063
+    ]
+  }
+}
