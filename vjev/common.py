@@ -43,3 +43,6 @@ _gpu_base = (
 # Local source goes last, so code edits never trigger an image rebuild.
 gpu_image = _gpu_base.add_local_python_source("vjev")
 train_image = _gpu_base.uv_pip_install("peft").add_local_python_source("vjev")
+# Cheap baselines: sentence embeddings, CLIP features, gradient boosting and MLPs.
+baseline_image = _gpu_base.uv_pip_install(
+    "sentence-transformers", "xgboost", "scikit-learn").add_local_python_source("vjev")
