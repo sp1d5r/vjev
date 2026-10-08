@@ -18,6 +18,7 @@ The first benchmark is SnapUGC engagement prediction (ECR).
 | Video-only ablation (same backbone, no audio) | Done: 0.628, audio gap inside noise |
 | Omni + CLIP ensemble | Done: 0.695 |
 | VideoLLaMA2-AV retrained on our split | Planned |
+| Modality dropout (train on A+V, V only, A only, text only views of each clip) | Idea: may make the model use audio; small test first |
 | Full run (30.6k clips, E006) | Stopped at step 2,440: collapsed under a long high-LR schedule |
 | Medium stability test, lower LR +/- vision LoRA (E008) | Running |
 | Learning-rate sweep + vision LoRA test (2k clips, E007) | Done: failures come from a high rate held for 400+ steps; vision LoRA promising |
