@@ -33,9 +33,24 @@ RUN_NOTES = {
         "Pilot. Qwen3-Omni with video and audio, typed head trained from scratch, "
         "10,000 training clips, checked on 500 held-out clips every 200 steps. "
         "Result: final 0.654, passing the 0.50 bar. Probabilities stay honest (ECE 0.035).",
+    "ablation-omni-v-10k": "Failed: went NaN near step 720 (bf16 head). Restarted as -v2.",
+    "full-omni-av-30k": "Failed: went NaN near step 730 (bf16 head). Restarted as -v2.",
+    "smoke-fp32-head": "Smoke test of the fp32 head fix: 20 steps. Ignore the numbers.",
+    "ablation-omni-v-10k-v2":
+        "Ablation. Same as the pilot but video only, no audio. Tells us if audio helps.",
+    "full-omni-av-30k-v2":
+        "Full run. Qwen3-Omni with video and audio on all 30,631 training clips.",
+    "baseline-text-xgb": "Cheap baseline: title + description embeddings, XGBoost. Final 0.326.",
+    "baseline-clip-mlp":
+        "Cheap baseline: CLIP frame embeddings, small MLP. Final 0.662, but overconfident "
+        "(calibration error 0.144).",
+    "baseline-clip+text-mlp":
+        "Cheap baseline: CLIP frames + text embeddings, small MLP. Final 0.612, very "
+        "overconfident (calibration error 0.465).",
 }
 
-TRAIN_RUNS = "pilot|omni-"  # name filter for real training runs
+TRAIN_RUNS = "pilot|omni-.*-v2"  # name filter for real training runs
+VAL_COMPARE_RUNS = "baseline-|pilot-"
 ZERO_SHOT_RUNS = "zs-.*test1736"
 
 
@@ -61,7 +76,8 @@ def blocks() -> list:
         wr.CalloutBlock(text=[
             ("Current answer: yes. Zero-shot models cannot do it (final score 0.13 to 0.17). "
             "After training on 10,000 clips with audio, the pilot scores 0.654 on held-out "
-            "clips, above our 0.50 bar. Its curve is in the first chart below.")]),
+            "clips, above our 0.50 bar. A cheap CLIP + MLP baseline ranks as well (0.662) but "
+            "is overconfident. The full 30k run decides who ranks better.")]),
         wr.H2("How to read the numbers"),
         wr.UnorderedList(items=[
             ("Final score: how well the model ranks clips by retention, from 0 (random) to 1 "
@@ -134,7 +150,19 @@ def blocks() -> list:
                         line_titles={"train/clips_per_hour": "Clips per hour"},
                         layout=wr.Layout(w=12, h=7)),
         ]),
-        wr.H2("4. Zero-shot baselines (before any training)"),
+        wr.H2("4. Cheap baselines on the same 500 val clips"),
+        wr.P("Standard features trained on all 30,631 clips, against the Omni pilot (10,000 clips). "
+             "CLIP + MLP ranks as well as the pilot, but its probabilities are much less honest."),
+        wr.PanelGrid(runsets=[wr.Runset(ENTITY, PROJECT, name="Val comparison",
+                                        query=VAL_COMPARE_RUNS)], panels=[
+            wr.BarPlot(title="Final score on val (higher is better)", metrics=["val/final"],
+                       orientation="h", layout=wr.Layout(w=8, h=8)),
+            wr.BarPlot(title="Brier on val (lower is better)", metrics=["val/brier"],
+                       orientation="h", layout=wr.Layout(w=8, h=8)),
+            wr.BarPlot(title="Calibration error on val (lower is better)", metrics=["val/ece"],
+                       orientation="h", layout=wr.Layout(w=8, h=8)),
+        ]),
+        wr.H2("5. Zero-shot baselines (before any training)"),
         wr.P("Cloudflare's Clef-flash with no training, on our 1,736-clip test split. "
              "This is the starting point the trained model must beat."),
         wr.PanelGrid(runsets=[zero], panels=[

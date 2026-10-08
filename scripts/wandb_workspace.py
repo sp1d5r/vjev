@@ -18,7 +18,8 @@ import wandb_workspaces.workspaces as ws
 ENTITY, PROJECT = "sp1d5r", "vjev"
 URL_FILE = pathlib.Path(__file__).resolve().parent.parent / "results" / "wandb_view_url.txt"
 # Runs that only test the plumbing. Greyed out so they don't clutter the charts.
-TEST_RUNS = {"clef-flash-zs-video+text-train20", "smoke-omni-av", "tput-omni-av"}
+TEST_RUNS = {"clef-flash-zs-video+text-train20", "smoke-omni-av", "tput-omni-av",
+             "smoke-fp32-head", "ablation-omni-v-10k", "full-omni-av-30k"}
 
 READ_ME = """### What this project tests
 Can a typed model predict whether viewers keep watching a short video past the first 5 seconds?
@@ -33,7 +34,7 @@ Can a typed model predict whether viewers keep watching a short video past the f
 0.25 or less = no · 0.25 to 0.50 = weak signal · 0.50 or more = competitive
 
 ### Runs
-`zs-` = zero-shot Clef-flash, no training · `pilot-` / `omni-` = Qwen3-Omni training runs · greyed out = plumbing tests
+`zs-` = zero-shot Clef-flash, no training · `pilot-` / `omni-` = Qwen3-Omni training runs · `baseline-` = cheap baselines · greyed out = plumbing tests and failed runs
 """
 
 
@@ -72,7 +73,16 @@ def sections() -> list[ws.Section]:
             line("Speed (clips per hour, about $1.80 per 1,000 clips)",
                  {"train/clips_per_hour": "Clips per hour"}, h=7),
         ]),
-        ws.Section(name="4. Zero-shot baselines (no training)", is_open=True, panels=[
+        ws.Section(name="4. Cheap baselines vs the pilot (same 500 val clips)", is_open=True,
+                   panels=[
+            wr.BarPlot(title="Final score on val (higher is better)", metrics=["val/final"],
+                       orientation="h", layout=wr.Layout(w=8, h=8)),
+            wr.BarPlot(title="Brier on val (lower is better)", metrics=["val/brier"],
+                       orientation="h", layout=wr.Layout(w=8, h=8)),
+            wr.BarPlot(title="Calibration error on val (lower is better)", metrics=["val/ece"],
+                       orientation="h", layout=wr.Layout(w=8, h=8)),
+        ]),
+        ws.Section(name="5. Zero-shot baselines (no training)", is_open=True, panels=[
             wr.BarPlot(title="Final score with no training (higher is better)",
                        metrics=["final"], orientation="h", layout=wr.Layout(w=12, h=8)),
             wr.BarPlot(title="Brier with no training (0.900 = blind guess)",

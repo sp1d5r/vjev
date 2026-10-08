@@ -7,6 +7,59 @@ They are not comparable to the VQualA 2025 leaderboard, whose test labels are wi
 
 ---
 
+## 2026-10-08 · E003 · Cheap baselines on our split
+
+**Question:** how far do cheap, standard features get on the same split, and is the 30B model worth it?
+
+**Setup**
+
+- Text: title + description embedded with `paraphrase-multilingual-mpnet-base-v2`.
+- Visual: CLIP ViT-L/14 embeddings of 8 frames spread over the first 16 s. Features are the first frame plus the frame mean.
+- Models: XGBoost on text. MLP (one hidden layer of 512, early stopping on a train holdout) on CLIP, and on CLIP + text.
+- Each model predicts the 10 ECR levels as classes, so it gets Brier and ECE like the typed model. A regression twin is fit for ranking only.
+- Trained on all 30,631 train clips. Hyperparameters fixed up front, nothing tuned on val, no test.
+- Scored on the same 500 val clips as the Omni runs, and on all 1,714 val clips.
+
+**Results** (500 val clips, same as E002)
+
+| Model | Train clips | Final | Brier | ECE | Level acc | Regression twin final |
+|---|---|---|---|---|---|---|
+| Text + XGBoost | 30,631 | 0.326 | 0.899 | 0.055 | 0.192 | 0.341 |
+| CLIP + MLP | 30,631 | **0.662** | 0.876 | 0.144 | **0.246** | 0.621 |
+| CLIP + text + MLP | 30,631 | 0.612 | 1.136 | 0.465 | 0.232 | 0.657 |
+| Qwen3-Omni + typed head (E002) | 10,000 | 0.654 | **0.839** | **0.035** | 0.236 | - |
+
+On all 1,714 val clips: text 0.360, CLIP 0.652, CLIP + text 0.625.
+
+**What we learned**
+
+- CLIP + MLP is a strong baseline. It ranks as well as the Omni pilot, which saw a third of the data.
+- The visual signal dominates. Text alone reaches only 0.33 to 0.36.
+- The typed model's edge is honest probabilities: Brier 0.839 against 0.876, ECE 0.035 against 0.144. The MLPs are overconfident, and adding text makes it worse (ECE 0.47).
+- So the real bar for the paper is "beat CLIP + MLP on ranking", not 0.50. The full 30k run (E004) is the fair test.
+
+**Caveats**
+
+- The MLPs get no temperature scaling. With it, their calibration would improve. A fair version fits the temperature on a train holdout.
+- The CLIP + MLP regression twin gave 0.498 in one attempt and 0.621 in another (the Modal job ran twice). The classifier numbers matched exactly. The regression MLP is unstable, so we report the classifier.
+
+**Cost:** about $3 (feature extraction on L40S, fitting on CPU).
+
+**Raw data:** [`simple_baselines_val.json`](simple_baselines_val.json). Code: `vjev/simple_baselines.py`. W&B runs: `baseline-text-xgb`, `baseline-clip-mlp`, `baseline-clip+text-mlp`.
+
+---
+
+## 2026-10-08 · Incident · Two runs went NaN
+
+The first video-only ablation and the first full run both hit a NaN loss near step 720, about 2.5 h in.
+A NaN step corrupts the weights for good, so both were stopped. About $23 was lost.
+The video-only run had already degraded before that (val final 0.47 at step 400, then 0.19 at step 600).
+Fix: the typed head now runs in fp32 (the 30B thinker stays in bf16). Steps with a non-finite loss or gradient norm are skipped and counted in W&B (`train/skipped_*`, `train/grad_norm`).
+The pilot (E002) used the old bf16 head and did not hit this. Its numbers stand.
+Both runs restarted as `ablation-omni-v-10k-v2` and `full-omni-av-30k-v2`.
+
+---
+
 ## 2026-10-08 · E002 · Qwen3-Omni + typed head, pilot
 
 **Question:** does training a typed head on an audio-native backbone beat zero-shot, and by how much?
