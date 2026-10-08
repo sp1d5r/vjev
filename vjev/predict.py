@@ -30,7 +30,8 @@ def predict(run: str, split: str, limit: int) -> dict:
     ckpt = torch.load(root / "ckpt" / run / "best.pt", map_location="cuda", weights_only=False)
     cfg = ckpt["cfg"]
     path = snapshot_download(model.OMNI_ID)
-    net, _ = model.load(path, cfg["lora_r"], cfg["lora_alpha"])
+    net, _ = model.load(path, cfg["lora_r"], cfg["lora_alpha"],
+                        vision_lora=cfg.get("vision_lora", False))
     set_peft_model_state_dict(net.thinker, ckpt["lora"])
     net.head.load_state_dict(ckpt["head"])
 

@@ -22,6 +22,8 @@ SR = 16_000
 HEAD_CONFIG = {"width": 1024, "routing_layers": 2, "layers": 4, "heads": 16, "feedforward": 4096}
 # LoRA on the text model's attention only. Fullmatch, so the audio tower's layers are excluded.
 LORA_TARGETS = r"model\.layers\.\d+\.self_attn\.(q|k|v|o)_proj"
+# Optional: also adapt the vision tower's attention, so frame features can tune to retention.
+VISION_LORA_TARGETS = r"visual\.blocks\.\d+\.attn\.(qkv|proj)"
 MEDIA_KEYS = ("input_features", "feature_attention_mask", "pixel_values_videos", "video_grid_thw",
               "video_second_per_grid")
 PREFIX = f"<|im_start|>system\n{cs.SYSTEM_PROMPT}<|im_end|>\n<|im_start|>user\nSTATE:\n"
@@ -90,7 +92,8 @@ class TypedOmni(torch.nn.Module):
         return self.head(hidden.float(), ids, mask, [enc.record], self.out_weight)[0]
 
 
-def load(path: str, lora_r: int, lora_alpha: int, dropout: float = 0.05):
+def load(path: str, lora_r: int, lora_alpha: int, dropout: float = 0.05,
+         vision_lora: bool = False):
     """Return (model, processor). Only LoRA and the head are trainable."""
     from peft import LoraConfig, get_peft_model
     from transformers import Qwen3OmniMoeForConditionalGeneration, Qwen3OmniMoeProcessor
@@ -103,8 +106,9 @@ def load(path: str, lora_r: int, lora_alpha: int, dropout: float = 0.05):
     thinker.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
     out_weight = thinker.lm_head.weight.detach().float()
     thinker.lm_head = torch.nn.Identity()  # we only need hidden states, not 152k-way logits
+    targets = f"({LORA_TARGETS}|{VISION_LORA_TARGETS})" if vision_lora else LORA_TARGETS
     thinker = get_peft_model(thinker, LoraConfig(
-        r=lora_r, lora_alpha=lora_alpha, lora_dropout=dropout, target_modules=LORA_TARGETS))
+        r=lora_r, lora_alpha=lora_alpha, lora_dropout=dropout, target_modules=targets))
     hidden = full.config.thinker_config.text_config.hidden_size
     head = cs.JointSchemaHead(hidden_size=hidden, dropout=0.1, **HEAD_CONFIG).to("cuda")
     processor = Qwen3OmniMoeProcessor.from_pretrained(path)

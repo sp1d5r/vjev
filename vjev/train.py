@@ -115,7 +115,8 @@ def train(cfg: dict) -> dict:
     root = pathlib.Path(DATA)
     edges = json.loads((root / "index" / "meta.json").read_text())["level_edges"]
 
-    net, _ = model.load(path, cfg["lora_r"], cfg["lora_alpha"])
+    net, _ = model.load(path, cfg["lora_r"], cfg["lora_alpha"],
+                        vision_lora=cfg.get("vision_lora", False))
     lora = [p for p in net.thinker.parameters() if p.requires_grad]
     opt = torch.optim.AdamW([
         {"params": lora, "lr": cfg["lr_lora"]},
@@ -203,6 +204,10 @@ def train(cfg: dict) -> dict:
         if done:
             break
 
+    # LoRA B starts at zero, so a non-zero norm proves the vision adapters got gradients.
+    run.summary["vision_lora_b_norm"] = sum(
+        p.detach().float().norm().item() for n, p in net.thinker.named_parameters()
+        if "visual" in n and "lora_B" in n)
     run.summary["best_val_final"] = best
     run.summary["train_hours"] = (time.perf_counter() - t_start) / 3600
     run.finish()
@@ -215,7 +220,7 @@ def main(train_limit: int = 200, val_limit: int = 50, epochs: float = 1.0, max_s
          accum: int = 8, lr_lora: float = 1e-4, lr_head: float = 3e-4, lora_r: int = 64,
          lora_alpha: int = 128, smoothing: float = 0.05, brier_w: float = 1.0,
          emd_w: float = 1.0, eval_every: int = 100, audio: bool = True, seed: int = 0,
-         run_name: str = ""):
+         vision_lora: bool = False, run_name: str = ""):
     cfg = {k: v for k, v in locals().items()}
     cfg["run_name"] = run_name or (
         f"omni-{'av' if audio else 'v'}-n{train_limit}-r{lora_r}-{time.strftime('%m%d-%H%M')}")
