@@ -7,6 +7,49 @@ They are not comparable to the VQualA 2025 leaderboard, whose test labels are wi
 
 ---
 
+## 2026-10-08 · E007 · Learning-rate sweep and vision LoRA (running)
+
+**Question:** which peak learning rate lets the model learn from the first steps without collapsing, and does adapting the vision tower help?
+
+**Why:** with the fp32 head, E004 and E006 learned almost nothing while the LoRA learning rate was near its 1e-4 peak. The full run (E006) should have been preceded by a small test like this one.
+
+**Setup:** 4 runs on the same 2,000 train clips, scored on 200 val clips every 50 steps (250 steps total, about $4 each).
+
+| Run | LoRA LR | Head LR | Vision LoRA |
+|---|---|---|---|
+| `sweep-lr1e-4-2k` | 1e-4 | 3e-4 | no (control, current setting) |
+| `sweep-lr3e-5-2k` | 3e-5 | 1e-4 | no |
+| `sweep-lr1e-5-2k` | 1e-5 | 1e-4 | no |
+| `sweep-lr3e-5-vis-2k` | 3e-5 | 1e-4 | yes |
+
+Vision LoRA adds rank-64 adapters on `visual.blocks.N.attn.{qkv,proj}`.
+A 10-step smoke test confirmed the adapters receive gradients (LoRA B norm 5.96, from 0). It trains about 30% slower (about 1,980 clips per hour).
+
+**Results:** pending.
+
+---
+
+## 2026-10-08 · E006 · Full run, 30,631 clips (running)
+
+**Question:** with the same data as CLIP + MLP, does the Omni model rank better?
+
+**Setup:** as E002 (video + audio, LoRA LR 1e-4, head LR 3e-4) on all 30,631 train clips, 1 epoch, 3,829 steps, scored on the same 500 val clips every 400 steps. fp32 head.
+
+**So far**
+
+| Step | Final | Brier | Spread (levels) |
+|---|---|---|---|
+| 400 | 0.437 | 0.898 | 0.03 |
+| 800 | 0.185 | 0.899 | 0.04 |
+| 1200 | 0.238 | 0.898 | 0.10 |
+
+The model is near-flat while the learning rate is high, as in E004. We expect recovery as the cosine schedule decays after about step 1,900.
+Stop rule, set in advance: if val final is still under 0.4 at step 2,400, stop the run.
+
+**Speed:** about 5,000 clips per hour, faster than the pilot.
+
+---
+
 ## 2026-10-08 · E005 · Ensemble of Omni and CLIP
 
 **Question:** does the Omni model know something CLIP + MLP does not?

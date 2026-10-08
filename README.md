@@ -18,7 +18,8 @@ The first benchmark is SnapUGC engagement prediction (ECR).
 | Video-only ablation (same backbone, no audio) | Done: 0.628, audio gap inside noise |
 | Omni + CLIP ensemble | Done: 0.695 |
 | VideoLLaMA2-AV retrained on our split | Planned |
-| Full run (30.6k clips) | Running (restarted after NaN fix) |
+| Full run (30.6k clips, E006) | Running: weak so far (0.24 at step 1,200), LR too high at peak |
+| Learning-rate sweep + vision LoRA test (2k clips, E007) | Running |
 
 ## Results
 
@@ -132,7 +133,14 @@ uv run modal run vjev/baseline.py --split test --limit 1736 --no-video  # text o
 uv run modal run vjev/preprocess.py::preprocess_all                     # decode clips once
 uv run modal run --detach vjev/train.py --train-limit 10000 --val-limit 500 --eval-every 200
 uv run modal run --detach vjev/train.py --no-audio ...                  # video-only ablation
+uv run modal run --detach vjev/train.py --vision-lora --lr-lora 3e-5 ... # also adapt the vision tower
+uv run modal run vjev/simple_baselines.py::embed_all                    # text + CLIP features, once
+uv run modal run vjev/simple_baselines.py::fit_all [--calibrate]        # cheap baselines (+ temperature)
+uv run modal run vjev/predict.py::predict_ckpt --run pilot-omni-av-10k  # per-clip val predictions
+uv run python scripts/ensemble.py pilot-omni-av-10k-val500 baseline-clip-mlp-ts-val
 ```
+
+Rule for spend: test settings on 2,000 clips (about $4) before any run over about $20.
 
 Training runs on one H200 at about 2,860 clips per hour (about $1.70 per 1,000 clips).
 
