@@ -19,7 +19,7 @@ The first benchmark is SnapUGC engagement prediction (ECR).
 | Omni + CLIP ensemble | Done: 0.695 |
 | VideoLLaMA2-AV retrained on our split | Planned |
 | Full run (30.6k clips, E006) | Running: weak so far (0.24 at step 1,200), LR too high at peak |
-| Learning-rate sweep + vision LoRA test (2k clips, E007) | Running |
+| Learning-rate sweep + vision LoRA test (2k clips, E007) | Done: failures come from a high rate held for 400+ steps; vision LoRA promising |
 
 ## Results
 
