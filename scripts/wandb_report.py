@@ -54,9 +54,15 @@ RUN_NOTES = {
         "calibration error 0.046: nearly as honest as the typed model. The bar to beat.",
     "baseline-clip+text-mlp-ts":
         "CLIP + text + MLP with temperature scaling. Final 0.661, calibration error 0.037.",
+    "smoke-vision-lora": "Smoke test of vision LoRA: 10 steps. Ignore the numbers.",
+    "sweep-lr1e-4-2k": "Learning-rate test, 2,000 clips: LoRA 1e-4 (current setting, control).",
+    "sweep-lr3e-5-2k": "Learning-rate test, 2,000 clips: LoRA 3e-5.",
+    "sweep-lr1e-5-2k": "Learning-rate test, 2,000 clips: LoRA 1e-5.",
+    "sweep-lr3e-5-vis-2k":
+        "Learning-rate test, 2,000 clips: LoRA 3e-5, plus LoRA on the vision encoder.",
 }
 
-TRAIN_RUNS = "pilot|omni-.*-v2"  # name filter for real training runs
+TRAIN_RUNS = "pilot|omni-.*-v2|sweep-"  # name filter for real training runs
 VAL_COMPARE_RUNS = "baseline-|pilot-"
 ZERO_SHOT_RUNS = "zs-.*test1736"
 

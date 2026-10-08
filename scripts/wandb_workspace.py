@@ -19,7 +19,8 @@ ENTITY, PROJECT = "sp1d5r", "vjev"
 URL_FILE = pathlib.Path(__file__).resolve().parent.parent / "results" / "wandb_view_url.txt"
 # Runs that only test the plumbing. Greyed out so they don't clutter the charts.
 TEST_RUNS = {"clef-flash-zs-video+text-train20", "smoke-omni-av", "tput-omni-av",
-             "smoke-fp32-head", "ablation-omni-v-10k", "full-omni-av-30k"}
+             "smoke-fp32-head", "ablation-omni-v-10k", "full-omni-av-30k",
+             "smoke-vision-lora"}
 
 READ_ME = """### What this project tests
 Can a typed model predict whether viewers keep watching a short video past the first 5 seconds?
@@ -34,7 +35,7 @@ Can a typed model predict whether viewers keep watching a short video past the f
 0.25 or less = no · 0.25 to 0.50 = weak signal · 0.50 or more = competitive
 
 ### Runs
-`zs-` = zero-shot Clef-flash, no training · `pilot-` / `omni-` = Qwen3-Omni training runs · `baseline-` = cheap baselines · greyed out = plumbing tests and failed runs
+`zs-` = zero-shot Clef-flash, no training · `pilot-` / `omni-` = Qwen3-Omni training runs · `baseline-` = cheap baselines · `sweep-` = small learning-rate tests · greyed out = plumbing tests and failed runs
 """
 
 
