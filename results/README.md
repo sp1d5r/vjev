@@ -52,24 +52,53 @@ Every run is weak or unstable in the 400 to 800 step range while the LoRA rate i
 
 ---
 
-## 2026-10-08 · E006 · Full run, 30,631 clips (running)
+## 2026-10-08 · E008 · Medium stability test (running)
+
+**Question:** with a lower peak LoRA rate (3e-5, head 1e-4), does the model stay stable through steps 400 to 800? And does vision LoRA help at n=500?
+
+**Why:** E007 showed that short tests cannot reveal the failure. It appears only after 400 to 800 steps at a high rate. A full run with vision LoRA would cost about $70, so this test comes first.
+
+**Setup:** 6,400 train clips (800 steps), video + audio, scored on the same 500 val clips as E002 every 100 steps.
+
+| Run | LoRA LR | Head LR | Vision LoRA | Est. cost |
+|---|---|---|---|---|
+| `mid-lr3e-5-vis-6k` | 3e-5 | 1e-4 | yes | about $15 |
+| `mid-lr3e-5-6k` | 3e-5 | 1e-4 | no | about $8 |
+
+**Pass rule (set before results):** val final keeps rising through steps 400 to 800 with no collapse, and ends at 0.60 or more.
+
+**Results:** pending.
+
+---
+
+## 2026-10-08 · E006 · Full run, 30,631 clips (stopped)
 
 **Question:** with the same data as CLIP + MLP, does the Omni model rank better?
 
-**Setup:** as E002 (video + audio, LoRA LR 1e-4, head LR 3e-4) on all 30,631 train clips, 1 epoch, 3,829 steps, scored on the same 500 val clips every 400 steps. fp32 head.
+**Setup:** as E002 (video + audio, LoRA LR 1e-4, head LR 3e-4) on all 30,631 train clips, 1 epoch, 3,829 steps planned, scored on the same 500 val clips every 400 steps. fp32 head.
 
-**So far**
+**Results** (500 val clips)
 
-| Step | Final | Brier | Spread (levels) |
-|---|---|---|---|
-| 400 | 0.437 | 0.898 | 0.03 |
-| 800 | 0.185 | 0.899 | 0.04 |
-| 1200 | 0.238 | 0.898 | 0.10 |
+| Step | Final | Brier | ECE | Spread (levels) |
+|---|---|---|---|---|
+| 400 | 0.437 | 0.898 | 0.033 | 0.03 |
+| 800 | 0.185 | 0.899 | 0.014 | 0.04 |
+| 1200 | 0.238 | 0.898 | 0.012 | 0.10 |
+| 1600 | 0.259 | 0.897 | 0.015 | 0.29 |
+| 2000 | 0.213 | 0.895 | 0.015 | 0.32 |
+| 2400 | 0.261 | 0.894 | 0.037 | 0.35 |
 
-The model is near-flat while the learning rate is high, as in E004. We expect recovery as the cosine schedule decays after about step 1,900.
-Stop rule, set in advance: if val final is still under 0.4 at step 2,400, stop the run.
+**Verdict:** stopped at step 2,440 by the stop rule set in advance (under 0.4 at step 2,400).
 
-**Speed:** about 5,000 clips per hour, faster than the pilot.
+**What we learned**
+
+- The model collapsed after step 400 and never recovered while the rate stayed high. It did not rescue itself as the rate fell from 1e-4 to about 6e-5.
+- A long, high-rate schedule is the failure, not the amount of data (see E007).
+- This run should have been preceded by a medium-length test (E008). That rule now applies to every run over about $20.
+
+**Cost:** about $23 lost (4.9 h on one H200).
+
+**W&B run:** `full-omni-av-30k-v2`.
 
 ---
 

@@ -40,7 +40,8 @@ RUN_NOTES = {
         "Ablation. Same as the pilot but video only, no audio. Final 0.628 against 0.654 "
         "with audio: inside the noise, so audio helps at most a little.",
     "full-omni-av-30k-v2":
-        "Full run. Qwen3-Omni with video and audio on all 30,631 training clips.",
+        "Full run. Qwen3-Omni with video and audio on all 30,631 training clips. Stopped at "
+        "step 2,440: it collapsed under a long high learning rate (0.26 at step 2,400).",
     "baseline-text-xgb": "Cheap baseline: title + description embeddings, XGBoost. Final 0.326.",
     "baseline-clip-mlp":
         "Cheap baseline: CLIP frame embeddings, small MLP. Final 0.662, but overconfident "
@@ -60,9 +61,12 @@ RUN_NOTES = {
     "sweep-lr1e-5-2k": "Learning-rate test, 2,000 clips: LoRA 1e-5.",
     "sweep-lr3e-5-vis-2k":
         "Learning-rate test, 2,000 clips: LoRA 3e-5, plus LoRA on the vision encoder.",
+    "mid-lr3e-5-vis-6k":
+        "Stability test, 800 steps: lower learning rate (3e-5) plus LoRA on the vision encoder.",
+    "mid-lr3e-5-6k": "Stability test, 800 steps: lower learning rate (3e-5), no vision LoRA.",
 }
 
-TRAIN_RUNS = "pilot|omni-.*-v2|sweep-"  # name filter for real training runs
+TRAIN_RUNS = "pilot|omni-.*-v2|sweep-|mid-"  # name filter for real training runs
 VAL_COMPARE_RUNS = "baseline-|pilot-"
 ZERO_SHOT_RUNS = "zs-.*test1736"
 
