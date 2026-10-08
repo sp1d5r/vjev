@@ -7,6 +7,42 @@ They are not comparable to the VQualA 2025 leaderboard, whose test labels are wi
 
 ---
 
+## 2026-10-08 · E004 · Video only, no audio (ablation)
+
+**Question:** does audio help?
+
+**Setup:** same as E002 (same 10,000 train clips, same 500 val clips, same hyperparameters) but with no audio input.
+One change from E002: the typed head now runs in fp32 (see the NaN incident below). So this is not a pure audio ablation.
+
+**Results** (val, 500 clips, 1 seed)
+
+| Step | Final | Brier | ECE | Spread (levels) |
+|---|---|---|---|---|
+| 200 | 0.208 | 0.900 | 0.021 | 0.00 |
+| 400 | 0.312 | 0.898 | 0.034 | 0.02 |
+| 600 | 0.395 | 0.898 | 0.030 | 0.07 |
+| 800 | 0.531 | 0.890 | 0.063 | 0.39 |
+| 1000 | 0.617 | 0.852 | 0.032 | 1.41 |
+| 1200 (best) | **0.628** | **0.847** | 0.029 | 1.72 |
+| 1250 (end) | 0.627 | 0.847 | 0.044 | 1.72 |
+
+| Run | Audio | Head | Final | Brier | ECE |
+|---|---|---|---|---|---|
+| E002 pilot | yes | bf16 | 0.654 | 0.839 | 0.035 |
+| E004 ablation | no | fp32 | 0.628 | 0.847 | 0.029 |
+
+**What we learned**
+
+- Without audio, the model ends 0.026 lower. That is inside the noise (standard error about 0.03 at n=500), and the head precision also changed. So audio helps at most a little. This is not yet a clean result.
+- With the fp32 head, the model learns almost nothing while the learning rate is near its peak (1e-4). Its predictions stay flat until about step 700, then it catches up quickly as the cosine schedule decays. The bf16 pilot learned earlier. A lower peak learning rate is the next thing to try.
+- Without audio, training is about 1.8x faster (5,200 clips per hour against 2,860).
+
+**Cost:** about $9 (1.95 h on one H200).
+
+**W&B run:** `ablation-omni-v-10k-v2`.
+
+---
+
 ## 2026-10-08 · E003 · Cheap baselines on our split
 
 **Question:** how far do cheap, standard features get on the same split, and is the 30B model worth it?
@@ -31,6 +67,18 @@ They are not comparable to the VQualA 2025 leaderboard, whose test labels are wi
 
 On all 1,714 val clips: text 0.360, CLIP 0.652, CLIP + text 0.625.
 
+**With temperature scaling** (classifier fit on 90% of train, one temperature fit on the other 10%, val untouched)
+
+| Model | Temperature | Final | Brier | ECE | Level acc |
+|---|---|---|---|---|---|
+| Text + XGBoost | 1.32 | 0.329 | 0.891 | 0.044 | 0.184 |
+| CLIP + MLP | 2.04 | **0.673** | 0.845 | 0.046 | 0.224 |
+| CLIP + text + MLP | 5.88 | 0.661 | 0.852 | 0.037 | 0.230 |
+| Qwen3-Omni + typed head (E002, no scaling) | - | 0.654 | **0.839** | **0.035** | **0.236** |
+
+On all 1,714 val clips: text 0.364, CLIP 0.656, CLIP + text 0.656.
+Raw data: [`simple_baselines_val_ts.json`](simple_baselines_val_ts.json). W&B runs end in `-ts`.
+
 **What we learned**
 
 - CLIP + MLP is a strong baseline. It ranks as well as the Omni pilot, which saw a third of the data.
@@ -40,10 +88,9 @@ On all 1,714 val clips: text 0.360, CLIP 0.652, CLIP + text 0.625.
 
 **Caveats**
 
-- The MLPs get no temperature scaling. With it, their calibration would improve. A fair version fits the temperature on a train holdout.
-- The CLIP + MLP regression twin gave 0.498 in one attempt and 0.621 in another (the Modal job ran twice). The classifier numbers matched exactly. The regression MLP is unstable, so we report the classifier.
+- The first fit ran out of memory and Modal retried it, so each W&B run appears twice. The classifier numbers matched exactly. The CLIP + MLP regression twin gave 0.498 once and 0.621 once, so it is unstable and we report the classifier. The memory bug is fixed.
 
-**Cost:** about $3 (feature extraction on L40S, fitting on CPU).
+**Cost:** about $5 (feature extraction on L40S, fitting on CPU, including the failed attempt).
 
 **Raw data:** [`simple_baselines_val.json`](simple_baselines_val.json). Code: `vjev/simple_baselines.py`. W&B runs: `baseline-text-xgb`, `baseline-clip-mlp`, `baseline-clip+text-mlp`.
 
@@ -56,7 +103,8 @@ A NaN step corrupts the weights for good, so both were stopped. About $23 was lo
 The video-only run had already degraded before that (val final 0.47 at step 400, then 0.19 at step 600).
 Fix: the typed head now runs in fp32 (the 30B thinker stays in bf16). Steps with a non-finite loss or gradient norm are skipped and counted in W&B (`train/skipped_*`, `train/grad_norm`).
 The pilot (E002) used the old bf16 head and did not hit this. Its numbers stand.
-Both runs restarted as `ablation-omni-v-10k-v2` and `full-omni-av-30k-v2`.
+Both runs restarted as `ablation-omni-v-10k-v2` (E004) and `full-omni-av-30k-v2` (running).
+With the fp32 head, both v2 runs learn slowly while the learning rate is near its peak (see E004).
 
 ---
 

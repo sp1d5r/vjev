@@ -37,7 +37,8 @@ RUN_NOTES = {
     "full-omni-av-30k": "Failed: went NaN near step 730 (bf16 head). Restarted as -v2.",
     "smoke-fp32-head": "Smoke test of the fp32 head fix: 20 steps. Ignore the numbers.",
     "ablation-omni-v-10k-v2":
-        "Ablation. Same as the pilot but video only, no audio. Tells us if audio helps.",
+        "Ablation. Same as the pilot but video only, no audio. Final 0.628 against 0.654 "
+        "with audio: inside the noise, so audio helps at most a little.",
     "full-omni-av-30k-v2":
         "Full run. Qwen3-Omni with video and audio on all 30,631 training clips.",
     "baseline-text-xgb": "Cheap baseline: title + description embeddings, XGBoost. Final 0.326.",
@@ -47,6 +48,12 @@ RUN_NOTES = {
     "baseline-clip+text-mlp":
         "Cheap baseline: CLIP frames + text embeddings, small MLP. Final 0.612, very "
         "overconfident (calibration error 0.465).",
+    "baseline-text-xgb-ts": "Text + XGBoost with temperature scaling. Final 0.329.",
+    "baseline-clip-mlp-ts":
+        "CLIP + MLP with one temperature fit on a train holdout. Final 0.673, Brier 0.845, "
+        "calibration error 0.046: nearly as honest as the typed model. The bar to beat.",
+    "baseline-clip+text-mlp-ts":
+        "CLIP + text + MLP with temperature scaling. Final 0.661, calibration error 0.037.",
 }
 
 TRAIN_RUNS = "pilot|omni-.*-v2"  # name filter for real training runs
@@ -76,8 +83,8 @@ def blocks() -> list:
         wr.CalloutBlock(text=[
             ("Current answer: yes. Zero-shot models cannot do it (final score 0.13 to 0.17). "
             "After training on 10,000 clips with audio, the pilot scores 0.654 on held-out "
-            "clips, above our 0.50 bar. A cheap CLIP + MLP baseline ranks as well (0.662) but "
-            "is overconfident. The full 30k run decides who ranks better.")]),
+            "clips, above our 0.50 bar. But a cheap CLIP + MLP baseline with temperature "
+            "scaling does as well (0.673, and nearly as honest). The full 30k run decides it.")]),
         wr.H2("How to read the numbers"),
         wr.UnorderedList(items=[
             ("Final score: how well the model ranks clips by retention, from 0 (random) to 1 "
@@ -152,7 +159,8 @@ def blocks() -> list:
         ]),
         wr.H2("4. Cheap baselines on the same 500 val clips"),
         wr.P("Standard features trained on all 30,631 clips, against the Omni pilot (10,000 clips). "
-             "CLIP + MLP ranks as well as the pilot, but its probabilities are much less honest."),
+             "Runs ending in -ts add one temperature fit on a train holdout. With it, CLIP + MLP "
+             "ranks slightly better than the pilot and is nearly as honest."),
         wr.PanelGrid(runsets=[wr.Runset(ENTITY, PROJECT, name="Val comparison",
                                         query=VAL_COMPARE_RUNS)], panels=[
             wr.BarPlot(title="Final score on val (higher is better)", metrics=["val/final"],
