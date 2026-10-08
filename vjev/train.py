@@ -149,30 +149,43 @@ def train(cfg: dict) -> dict:
     ckpt.mkdir(parents=True, exist_ok=True)
 
     step, micro, best, t_start = 0, 0, -1.0, time.perf_counter()
+    skipped_clips = skipped_steps = 0
+    grad_norm = torch.tensor(0.0)
     window: dict[str, float] = {"loss": 0.0, "ce": 0.0, "brier": 0.0, "emd": 0.0, "n": 0}
     net.train()
     done = False
     for _epoch in range(math.ceil(cfg["epochs"])):
         for enc, level, _ecr, _vid in train_dl:
             out = typed_loss(net(enc)[0], level, cfg["smoothing"], cfg["brier_w"], cfg["emd_w"])
-            (out["loss"] / cfg["accum"]).backward()
-            for k in ("loss", "ce", "brier", "emd"):
-                window[k] += out[k].detach().item()
-            window["n"] += 1
             micro += 1
+            # One bad clip must not poison the weights: skip non-finite losses and grads.
+            if torch.isfinite(out["loss"]):
+                (out["loss"] / cfg["accum"]).backward()
+                for k in ("loss", "ce", "brier", "emd"):
+                    window[k] += out[k].detach().item()
+                window["n"] += 1
+            else:
+                skipped_clips += 1
+                print(f"non-finite loss on {_vid}, skipped", flush=True)
             if micro % cfg["accum"]:
                 continue
-            torch.nn.utils.clip_grad_norm_(lora + list(net.head.parameters()), 1.0)
-            opt.step()
+            grad_norm = torch.nn.utils.clip_grad_norm_(lora + list(net.head.parameters()), 1.0)
+            if torch.isfinite(grad_norm):
+                opt.step()
+            else:
+                skipped_steps += 1
+                print(f"non-finite grad norm at step {step}, skipped", flush=True)
             sched.step()
             opt.zero_grad(set_to_none=True)
             step += 1
             if step % 10 == 0:
                 elapsed = time.perf_counter() - t_start
-                n = window.pop("n")
+                n = max(window.pop("n"), 1)
                 run.log({f"train/{k}": v / n for k, v in window.items()}
                         | {"train/lr": sched.get_last_lr()[0], "train/clips_per_hour":
-                           micro / elapsed * 3600, "step": step})
+                           micro / elapsed * 3600, "train/grad_norm": grad_norm.item(),
+                           "train/skipped_clips": skipped_clips,
+                           "train/skipped_steps": skipped_steps, "step": step})
                 window = {"loss": 0.0, "ce": 0.0, "brier": 0.0, "emd": 0.0, "n": 0}
             if step % cfg["eval_every"] == 0 or step == total_steps:
                 res, _ = evaluate(net, val_dl, edges)

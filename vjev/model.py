@@ -86,7 +86,8 @@ class TypedOmni(torch.nn.Module):
         with torch.autocast("cuda", dtype=torch.bfloat16):
             hidden = self.thinker(input_ids=ids, attention_mask=mask, use_cache=False,
                                   use_audio_in_video=enc.audio, **media).logits
-            return self.head(hidden, ids, mask, [enc.record], self.out_weight)[0]
+        # The head runs in fp32. Two bf16 runs went NaN near step 720, and this is the likely cause.
+        return self.head(hidden.float(), ids, mask, [enc.record], self.out_weight)[0]
 
 
 def load(path: str, lora_r: int, lora_alpha: int, dropout: float = 0.05):
@@ -100,7 +101,7 @@ def load(path: str, lora_r: int, lora_alpha: int, dropout: float = 0.05):
     thinker = full.thinker
     thinker.requires_grad_(False)
     thinker.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
-    out_weight = thinker.lm_head.weight.detach()
+    out_weight = thinker.lm_head.weight.detach().float()
     thinker.lm_head = torch.nn.Identity()  # we only need hidden states, not 152k-way logits
     thinker = get_peft_model(thinker, LoraConfig(
         r=lora_r, lora_alpha=lora_alpha, lora_dropout=dropout, target_modules=LORA_TARGETS))
