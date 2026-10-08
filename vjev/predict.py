@@ -1,6 +1,6 @@
 """Score a saved checkpoint on a split and keep the per-clip predictions.
 
-    modal run vjev/predict.py --run pilot-omni-av-10k --split val --limit 500
+    modal run vjev/predict.py::predict_ckpt --run pilot-omni-av-10k --split val --limit 500
 
 Writes /data/preds/{run}-{split}{limit}.jsonl with id, ecr, expected and probs per clip.
 """
@@ -47,7 +47,7 @@ def predict(run: str, split: str, limit: int) -> dict:
 
 
 @app.local_entrypoint()
-def main(run: str, split: str = "val", limit: int = 500):
+def predict_ckpt(run: str, split: str = "val", limit: int = 500):
     if split == "test":
         raise SystemExit("test is touched once per final model; run it deliberately, not here")
     print(json.dumps(predict.remote(run, split, limit), indent=2))
