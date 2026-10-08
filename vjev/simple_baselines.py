@@ -2,6 +2,7 @@
 
     modal run vjev/simple_baselines.py::embed_all   # features for every clip, once
     modal run vjev/simple_baselines.py::fit_all     # fit on train, score on val
+    modal run vjev/simple_baselines.py::fit_all --calibrate   # + temperature scaling
 
 Each model predicts the 10 ECR levels as a class distribution, so it gets the same typed
 metrics (Brier, ECE) as the Omni model. A regression variant is also fit for ranking only.
@@ -84,8 +85,34 @@ def embed_all():
     print(f"done {sum(embed_shard.starmap(shards))} clips")
 
 
+def _temperature(probs: np.ndarray, levels: np.ndarray) -> float:
+    """Temperature that minimises NLL of the class probabilities on held-out clips."""
+    from scipy.optimize import minimize_scalar
+
+    logp = np.log(np.clip(probs, 1e-12, 1.0))
+
+    def nll(t: float) -> float:
+        z = logp / t
+        z -= z.max(axis=1, keepdims=True)
+        z -= np.log(np.exp(z).sum(axis=1, keepdims=True))
+        return float(-z[np.arange(len(levels)), levels].mean())
+
+    return float(minimize_scalar(nll, bounds=(0.05, 20.0), method="bounded").x)
+
+
+def _scale(probs: np.ndarray, t: float) -> np.ndarray:
+    z = np.log(np.clip(probs, 1e-12, 1.0)) / t
+    z = np.exp(z - z.max(axis=1, keepdims=True))
+    return z / z.sum(axis=1, keepdims=True)
+
+
 def _fit_one(kind: str, xs: dict, ys: dict, levels: dict, val500: np.ndarray,
-             edges: np.ndarray) -> dict:
+             edges: np.ndarray, calibrate: bool = False) -> dict:
+    """Fit on train and score on val.
+
+    With calibrate, the classifier fits on 90% of train and a temperature is fit on the
+    other 10%, so val stays untouched. The regression twin is skipped.
+    """
     from sklearn.neural_network import MLPClassifier, MLPRegressor
     from sklearn.pipeline import make_pipeline
     from sklearn.preprocessing import StandardScaler
@@ -103,17 +130,24 @@ def _fit_one(kind: str, xs: dict, ys: dict, levels: dict, val500: np.ndarray,
                   "max_iter": 200, "random_state": 0}
         cls = make_pipeline(StandardScaler(), MLPClassifier(**params))
         reg = make_pipeline(StandardScaler(), MLPRegressor(**params))
-    cls.fit(xs["train"], levels["train"])
-    reg.fit(xs["train"], ys["train"])
+    out, t = {}, 1.0
+    if calibrate:
+        hold = np.random.default_rng(0).random(len(levels["train"])) < 0.1
+        cls.fit(xs["train"][~hold], levels["train"][~hold])
+        t = _temperature(cls.predict_proba(xs["train"][hold]), levels["train"][hold])
+        out["temperature"] = t
+    else:
+        cls.fit(xs["train"], levels["train"])
+        reg.fit(xs["train"], ys["train"])
 
-    out = {}
     for tag, mask in (("val500", val500), ("val", np.ones(len(ys["val"]), bool))):
-        probs = cls.predict_proba(xs["val"][mask])
+        probs = _scale(cls.predict_proba(xs["val"][mask]), t)
         expected = probs @ np.arange(probs.shape[1])
         m = report(expected, probs, ys["val"][mask], edges)
-        r = reg.predict(xs["val"][mask])
-        m["reg_srocc"], m["reg_plcc"] = srocc(r, ys["val"][mask]), plcc(r, ys["val"][mask])
-        m["reg_final"] = (m["reg_srocc"] + m["reg_plcc"]) / 2
+        if not calibrate:
+            r = reg.predict(xs["val"][mask])
+            m["reg_srocc"], m["reg_plcc"] = srocc(r, ys["val"][mask]), plcc(r, ys["val"][mask])
+            m["reg_final"] = (m["reg_srocc"] + m["reg_plcc"]) / 2
         out[tag] = m
     return out
 
@@ -121,7 +155,7 @@ def _fit_one(kind: str, xs: dict, ys: dict, levels: dict, val500: np.ndarray,
 
 @app.function(image=baseline_image, cpu=16, memory=65536, timeout=7200,
               volumes={DATA: data_vol}, secrets=[modal.Secret.from_name("wandb")])
-def fit_all_remote() -> list[dict]:
+def fit_all_remote(calibrate: bool = False) -> list[dict]:
     import wandb
 
     from vjev.metrics import ecr_level
@@ -156,11 +190,13 @@ def fit_all_remote() -> list[dict]:
     results = []
     for name, kind, keys in setups:
         xs = {s: x(s, keys) for s in ("train", "val")}
-        res = {"model": name, **_fit_one(kind, xs, ys, levels, val500, edges)}
+        name = f"{name}-ts" if calibrate else name
+        res = {"model": name, **_fit_one(kind, xs, ys, levels, val500, edges, calibrate)}
         res["n_train"] = len(ys["train"])
         results.append(res)
         run = wandb.init(project="vjev", entity="sp1d5r", name=f"baseline-{name}",
-                         config={"model": name, "features": keys, "kind": kind}, reinit=True)
+                         config={"model": name, "features": keys, "kind": kind,
+                                 "calibrate": calibrate}, reinit=True)
         run.summary.update({f"val/{k}": v for k, v in res["val500"].items()})
         run.summary.update({f"val_full/{k}": v for k, v in res["val"].items()})
         run.finish()
@@ -169,8 +205,9 @@ def fit_all_remote() -> list[dict]:
 
 
 @app.local_entrypoint()
-def fit_all():
-    results = fit_all_remote.remote()
-    out = pathlib.Path(__file__).resolve().parent.parent / "results" / "simple_baselines_val.json"
+def fit_all(calibrate: bool = False):
+    results = fit_all_remote.remote(calibrate)
+    name = "simple_baselines_val_ts.json" if calibrate else "simple_baselines_val.json"
+    out = pathlib.Path(__file__).resolve().parent.parent / "results" / name
     out.write_text(json.dumps(results, indent=2) + "\n")
     print(f"wrote {out}")
