@@ -52,7 +52,27 @@ Every run is weak or unstable in the 400 to 800 step range while the LoRA rate i
 
 ---
 
-## 2026-10-08 · E008 · Medium stability test (running)
+## 2026-10-08 · E009 · Full run, 30,631 clips, LoRA LR 3e-5 (running)
+
+**Question:** with all train clips and the settings that passed E008, does Omni beat CLIP + MLP alone? Does the ensemble improve?
+
+**Setup:** video + audio, LoRA LR 3e-5, head LR 1e-4, no vision LoRA, 1 epoch (about 3,830 steps), scored on the same 500 val clips every 200 steps. App `ap-NNSpTEsWhLc0fOvdKo1U1i`.
+Estimated about 9 h and about $45.
+
+**Risk:** E008 kept the rate near its peak for only about 300 steps. This run keeps it near 3e-5 for about 1,500 steps, which has not been tested.
+
+**Stop rule (set before results):**
+
+- At step 800, val final must be 0.60 or more (E008 had 0.677 at step 800).
+- After that, stop if two evals in a row are more than 0.05 below the best so far. `best.pt` is kept, so a late collapse still leaves the best checkpoint.
+
+**Results:** pending.
+
+**W&B run:** `full-lr3e-5-30k`.
+
+---
+
+## 2026-10-08 · E008 · Medium stability test (passed)
 
 **Question:** with a lower peak LoRA rate (3e-5, head 1e-4), does the model stay stable through steps 400 to 800? And does vision LoRA help at n=500?
 
@@ -67,7 +87,48 @@ Every run is weak or unstable in the 400 to 800 step range while the LoRA rate i
 
 **Pass rule (set before results):** val final keeps rising through steps 400 to 800 with no collapse, and ends at 0.60 or more.
 
-**Results:** pending.
+**Results** (val final, 500 clips; Brier in brackets)
+
+| Step | No vision LoRA | Vision LoRA |
+|---|---|---|
+| 100 | 0.448 (0.899) | 0.470 (0.897) |
+| 200 | 0.469 (0.888) | 0.564 (0.873) |
+| 300 | 0.582 (0.871) | 0.582 (0.882) |
+| 400 | 0.655 (0.847) | 0.645 (0.859) |
+| 500 | 0.671 (0.837) | 0.646 (0.852) |
+| 600 | 0.676 (0.836) | 0.665 (0.839) |
+| 700 | 0.675 (0.834) | 0.666 (0.839) |
+| 800 | **0.677** (**0.833**) | 0.663 (0.839) |
+| ECE at 800 | 0.042 | 0.023 |
+| Clips per hour | 3,790 | 3,090 |
+
+Both runs pass. Neither skipped a step.
+
+Ensemble of the no-vision run with CLIP + MLP (temperature-scaled), same 500 clips, from `scripts/ensemble.py --out results/ensemble_mid_val500.json`:
+
+| Model | Final | Brier | ECE |
+|---|---|---|---|
+| Omni E008, no vision LoRA | 0.677 | 0.833 | 0.042 |
+| CLIP + MLP, temperature-scaled | 0.673 | 0.845 | 0.046 |
+| **Equal-weight ensemble** | **0.714** | **0.826** | 0.054 |
+
+Paired bootstrap (2,000 resamples) of the final-score gap:
+
+- Ensemble minus Omni: +0.037 [0.016, 0.060].
+- Ensemble minus CLIP: +0.041 [0.017, 0.066].
+- CLIP minus Omni: -0.004 [-0.048, +0.041].
+
+Prediction correlation between Omni and CLIP: 0.79 (0.82 for the pilot).
+
+**What we learned**
+
+- A lower LoRA rate fixes the collapse at this length. The no-vision run rose every eval to step 600 and then held.
+- With 6,400 clips, Omni beats the 10,000-clip pilot (0.677 against 0.654) and ties CLIP + MLP trained on 30,631 clips.
+- Both ensemble gaps now exclude zero. Omni and CLIP make different mistakes.
+- Vision LoRA does not help at n=500. It is 0.014 behind and 20% slower, but it has the lowest ECE. The E007 gain did not hold up.
+- Caveat: the checkpoint (best of 8 evals) and the ensemble were chosen on these val clips, so 0.714 is slightly optimistic. The test split will give the honest number.
+
+**Cost:** about $18 for both runs and scoring (billed $95.34 before, $113.21 after).
 
 ---
 

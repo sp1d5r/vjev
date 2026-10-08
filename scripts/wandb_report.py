@@ -62,12 +62,16 @@ RUN_NOTES = {
     "sweep-lr3e-5-vis-2k":
         "Learning-rate test, 2,000 clips: LoRA 3e-5, plus LoRA on the vision encoder.",
     "mid-lr3e-5-vis-6k":
-        "Stability test, 800 steps: lower learning rate (3e-5) plus LoRA on the vision encoder.",
-    "mid-lr3e-5-6k": "Stability test, 800 steps: lower learning rate (3e-5), no vision LoRA.",
+        "Stability test, 800 steps: lower learning rate (3e-5) plus LoRA on the vision encoder. "
+        "Passed, ended at 0.663.",
+    "mid-lr3e-5-6k": "Stability test, 800 steps: lower learning rate (3e-5), no vision LoRA. "
+                     "Passed, ended at 0.677. 0.714 when averaged with CLIP + MLP.",
+    "full-lr3e-5-30k": "Full run on all 30,631 train clips with the E008 settings "
+                       "(learning rate 3e-5, no vision LoRA).",
 }
 
-TRAIN_RUNS = "pilot|omni-.*-v2|sweep-|mid-"  # name filter for real training runs
-VAL_COMPARE_RUNS = "baseline-|pilot-"
+TRAIN_RUNS = "pilot|omni-.*-v2|sweep-|mid-|full-lr"  # name filter for real training runs
+VAL_COMPARE_RUNS = "baseline-|pilot-|mid-lr3e-5-6k"
 ZERO_SHOT_RUNS = "zs-.*test1736"
 
 
