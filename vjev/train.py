@@ -1,8 +1,12 @@
-"""Fine-tune Qwen3-Omni + typed head on SnapUGC ECR, logged to W&B.
+"""Fine-tune Qwen3-Omni + typed head, logged to W&B.
+
+Tasks: `snapugc` (one question, retention level) and `vf` (VideoFeedback, five questions
+per clip, all answered in one forward pass).
 
     modal run vjev/train.py --train-limit 200 --val-limit 50 --max-steps 20   # smoke test
     modal run vjev/train.py --train-limit 10000 --val-limit 500               # pilot
     modal run vjev/train.py --no-audio ...                                    # video-only ablation
+    modal run vjev/train.py --task vf --no-audio ...                          # VideoFeedback
 """
 
 from __future__ import annotations
@@ -18,11 +22,12 @@ import modal
 from vjev.common import DATA, HF, app, data_vol, hf_vol, train_image
 
 
-def _records(split: str, limit: int, seed: int) -> list[dict]:
+def _records(split: str, limit: int, seed: int, task: str = "snapugc") -> list[dict]:
     from vjev.preprocess import pre_path
 
     root = pathlib.Path(DATA)
-    lines = (root / "index" / f"{split}.jsonl").read_text().splitlines()
+    name = f"vf_{split}" if task == "vf" else split
+    lines = (root / "index" / f"{name}.jsonl").read_text().splitlines()
     recs = [json.loads(line) for line in lines]
     recs = [r for r in recs if pre_path(root, r["id"]).exists()]
     random.Random(seed).shuffle(recs)
@@ -32,8 +37,10 @@ def _records(split: str, limit: int, seed: int) -> list[dict]:
 class ClipDataset:
     """Map-style dataset. Each worker loads its own processor on first use."""
 
-    def __init__(self, recs: list[dict], edges: list[float], model_path: str, audio: bool):
+    def __init__(self, recs: list[dict], edges: list[float], model_path: str, audio: bool,
+                 task: str = "snapugc"):
         self.recs, self.edges, self.model_path, self.audio = recs, edges, model_path, audio
+        self.task = task
         self.processor = None
 
     def __len__(self) -> int:
@@ -45,16 +52,21 @@ class ClipDataset:
 
         from vjev import model, preprocess
         from vjev.metrics import ecr_level
-        from vjev.questions import record_for
+        from vjev.questions import VF_QUESTIONS, record_for, vf_record
+        from vjev.videofeedback import FPS as VF_FPS
 
         if self.processor is None:
             self.processor = Qwen3OmniMoeProcessor.from_pretrained(self.model_path)
         rec = self.recs[i]
         frames, audio, duration = preprocess.load(preprocess.pre_path(pathlib.Path(DATA), rec["id"]))
+        if self.task == "vf":
+            enc = model.encode(self.processor, vf_record(rec, duration), frames, None, fps=VF_FPS)
+            levels = [rec["scores"][k] - 1 for k in VF_QUESTIONS]
+            return enc, levels, [float(v) for v in levels], rec["id"]
         record = record_for(rec, self.edges, duration, text=True)
         enc = model.encode(self.processor, record, frames, audio if self.audio else None)
         level = int(ecr_level(np.array([rec["ecr"]]), np.array(self.edges))[0])
-        return enc, level, rec["ecr"], rec["id"]
+        return enc, [level], [rec["ecr"]], rec["id"]
 
 
 def _loader(ds, shuffle: bool, workers: int = 8):
@@ -64,30 +76,65 @@ def _loader(ds, shuffle: bool, workers: int = 8):
                                        prefetch_factor=4, persistent_workers=False)
 
 
-def evaluate(net, loader, edges, limit_s: float | None = None) -> tuple[dict, list[dict]]:
+def task_questions(task: str, edges: list[float]) -> dict[str, list[float]]:
+    """Question names in head order, with the inner edges that map targets to levels."""
+    from vjev.questions import VF_QUESTIONS
+
+    if task == "vf":  # targets are already levels 0 to 3
+        return {q: [0.5, 1.5, 2.5] for q in VF_QUESTIONS}
+    return {"ecr": edges}
+
+
+def evaluate(net, loader, edges, limit_s: float | None = None,
+             task: str = "snapugc") -> tuple[dict, list[dict]]:
+    """One question: the usual keys. Several: `{question}/{metric}` plus their means."""
     import numpy as np
     import torch
 
     from vjev import metrics
 
+    qs = task_questions(task, edges)
     net.eval()
-    rows, fwd = [], []
+    per_q: dict[str, dict[str, list]] = {q: {"probs": [], "target": []} for q in qs}
+    ids, fwd = [], []
     with torch.no_grad():
-        for enc, _level, ecr, vid in loader:
+        for enc, _levels, targets, vid in loader:
             t0 = time.perf_counter()
-            probs = net(enc)[0].float().softmax(-1).cpu().numpy()
-            torch.cuda.synchronize()
+            outs = [o.float().softmax(-1).cpu().numpy() for o in net(enc)]
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
             fwd.append(time.perf_counter() - t0)
-            rows.append({"id": vid, "ecr": ecr, "probs": probs.tolist(),
-                         "expected": float((probs * np.arange(len(probs))).sum())})
+            ids.append(vid)
+            for q, probs, t in zip(qs, outs, targets, strict=True):
+                per_q[q]["probs"].append(probs)
+                per_q[q]["target"].append(t)
             if limit_s and sum(fwd) > limit_s:
                 break
     net.train()
-    probs = np.array([r["probs"] for r in rows])
-    expected = np.array([r["expected"] for r in rows])
-    result = metrics.report(expected, probs, np.array([r["ecr"] for r in rows]), np.array(edges))
+    results = {}
+    for q, d in per_q.items():
+        probs = np.array(d["probs"])
+        d["expected"] = probs @ np.arange(probs.shape[1])
+        r = metrics.report(d["expected"], probs, np.array(d["target"]), np.array(qs[q]))
+        r["expected_std"] = float(d["expected"].std())
+        results[q] = r
+    if len(qs) == 1:
+        (q,) = qs
+        result = results[q]
+        d = per_q[q]
+        rows = [{"id": i, "ecr": t, "probs": p.tolist(), "expected": float(e)}
+                for i, t, p, e in zip(ids, d["target"], d["probs"], d["expected"], strict=True)]
+    else:
+        result = {f"{q}/{k}": v for q, r in results.items() for k, v in r.items() if k != "n"}
+        for k in ("srocc", "plcc", "final", "brier", "ece", "level_acc", "expected_std"):
+            result[k] = float(np.mean([r[k] for r in results.values()]))
+        result["n"] = len(ids)
+        rows = [{"id": i, "scores": {q: {"target": per_q[q]["target"][j],
+                                         "probs": per_q[q]["probs"][j].tolist(),
+                                         "expected": float(per_q[q]["expected"][j])}
+                                     for q in qs}}
+                for j, i in enumerate(ids)]
     result["forward_ms_p50"] = float(np.median(fwd) * 1e3)
-    result["expected_std"] = float(expected.std())
     return result, rows
 
 
@@ -123,10 +170,12 @@ def train(cfg: dict) -> dict:
         {"params": net.head.parameters(), "lr": cfg["lr_head"]},
     ], weight_decay=0.01)
 
-    train_recs = _records("train", cfg["train_limit"], cfg["seed"])
-    val_recs = _records("val", cfg["val_limit"], cfg["seed"])
-    train_dl = _loader(ClipDataset(train_recs, edges, path, cfg["audio"]), shuffle=True)
-    val_dl = _loader(ClipDataset(val_recs, edges, path, cfg["audio"]), shuffle=False, workers=4)
+    task = cfg.get("task", "snapugc")
+    train_recs = _records("train", cfg["train_limit"], cfg["seed"], task)
+    val_recs = _records("val", cfg["val_limit"], cfg["seed"], task)
+    train_dl = _loader(ClipDataset(train_recs, edges, path, cfg["audio"], task), shuffle=True)
+    val_dl = _loader(ClipDataset(val_recs, edges, path, cfg["audio"], task), shuffle=False,
+                     workers=4)
 
     total_steps = cfg["max_steps"] or math.ceil(len(train_recs) * cfg["epochs"] / cfg["accum"])
     warmup = min(50, total_steps // 10)
@@ -137,7 +186,10 @@ def train(cfg: dict) -> dict:
         return 0.5 * (1 + math.cos(math.pi * (step - warmup) / max(1, total_steps - warmup)))
 
     sched = torch.optim.lr_scheduler.LambdaLR(opt, lr_scale)
-    notes = (f"Qwen3-Omni with {'video and audio' if cfg['audio'] else 'video only (no audio)'}, "
+    what = ("VideoFeedback, 5 questions per clip" if task == "vf"
+            else "SnapUGC retention")
+    notes = (f"{what}. Qwen3-Omni with "
+             f"{'video and audio' if cfg['audio'] else 'video only (no audio)'}, "
              f"typed head trained from scratch, {len(train_recs):,} training clips, "
              f"LoRA rank {cfg['lora_r']}. Checked on {len(val_recs)} held-out clips "
              f"every {cfg['eval_every']} steps.")
@@ -156,8 +208,11 @@ def train(cfg: dict) -> dict:
     net.train()
     done = False
     for _epoch in range(math.ceil(cfg["epochs"])):
-        for enc, level, _ecr, _vid in train_dl:
-            out = typed_loss(net(enc)[0], level, cfg["smoothing"], cfg["brier_w"], cfg["emd_w"])
+        for enc, levels, _targets, _vid in train_dl:
+            # One loss per question, averaged, so adding questions does not scale the rate.
+            parts = [typed_loss(o, lv, cfg["smoothing"], cfg["brier_w"], cfg["emd_w"])
+                     for o, lv in zip(net(enc), levels, strict=True)]
+            out = {k: sum(p[k] for p in parts) / len(parts) for k in parts[0]}
             micro += 1
             # One bad clip must not poison the weights: skip non-finite losses and grads.
             if torch.isfinite(out["loss"]):
@@ -189,7 +244,7 @@ def train(cfg: dict) -> dict:
                            "train/skipped_steps": skipped_steps, "step": step})
                 window = {"loss": 0.0, "ce": 0.0, "brier": 0.0, "emd": 0.0, "n": 0}
             if step % cfg["eval_every"] == 0 or step == total_steps:
-                res, _ = evaluate(net, val_dl, edges)
+                res, _ = evaluate(net, val_dl, edges, task=task)
                 run.log({f"val/{k}": v for k, v in res.items()} | {"step": step})
                 print(f"step {step}/{total_steps} val {json.dumps(res)}", flush=True)
                 if res["final"] > best:
@@ -220,7 +275,7 @@ def main(train_limit: int = 200, val_limit: int = 50, epochs: float = 1.0, max_s
          accum: int = 8, lr_lora: float = 1e-4, lr_head: float = 3e-4, lora_r: int = 64,
          lora_alpha: int = 128, smoothing: float = 0.05, brier_w: float = 1.0,
          emd_w: float = 1.0, eval_every: int = 100, audio: bool = True, seed: int = 0,
-         vision_lora: bool = False, run_name: str = ""):
+         vision_lora: bool = False, task: str = "snapugc", run_name: str = ""):
     cfg = {k: v for k, v in locals().items()}
     cfg["run_name"] = run_name or (
         f"omni-{'av' if audio else 'v'}-n{train_limit}-r{lora_r}-{time.strftime('%m%d-%H%M')}")

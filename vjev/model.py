@@ -36,15 +36,16 @@ class Encoded:
     audio: bool
 
 
-def encode(processor, record: dict, frames: np.ndarray, audio: np.ndarray | None) -> Encoded:
+def encode(processor, record: dict, frames: np.ndarray, audio: np.ndarray | None,
+           fps: float = FPS) -> Encoded:
     """Encode text with Clef's format, then splice the media tokens in after the prefix."""
     tok = processor.tokenizer
     base = cs.encode_record(tok, record)
     if len(frames) % 2:  # the video processor groups frames in pairs
         frames = frames[:-1]
-    kwargs = {"fps": FPS, "do_sample_frames": False, "return_tensors": "pt"}
+    kwargs = {"fps": fps, "do_sample_frames": False, "return_tensors": "pt"}
     if audio is not None:
-        n = int(len(frames) / FPS * SR)
+        n = int(len(frames) / fps * SR)
         audio = np.pad(audio[:n], (0, max(0, n - len(audio))))  # silent clips get silence
         out = processor(text=["<|vision_start|><|video_pad|><|vision_end|>\n"], videos=[frames],
                         audio=[audio], use_audio_in_video=True, sampling_rate=SR, **kwargs)

@@ -42,9 +42,10 @@ def predict(run: str, split: str, limit: int) -> dict:
     net.head.load_state_dict(ckpt["head"])
 
     edges = json.loads((root / "index" / "meta.json").read_text())["level_edges"]
-    recs = _records(split, limit, cfg["seed"])
-    loader = _loader(ClipDataset(recs, edges, path, cfg["audio"]), shuffle=False, workers=8)
-    res, rows = evaluate(net, loader, edges)
+    task = cfg.get("task", "snapugc")
+    recs = _records(split, limit, cfg["seed"], task)
+    loader = _loader(ClipDataset(recs, edges, path, cfg["audio"], task), shuffle=False, workers=8)
+    res, rows = evaluate(net, loader, edges, task=task)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("".join(json.dumps(r) + "\n" for r in rows))
     data_vol.commit()
