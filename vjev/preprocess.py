@@ -28,22 +28,24 @@ SHARD = 200
 
 
 def pre_path(root: pathlib.Path, video_id: str) -> pathlib.Path:
+    if video_id.startswith("vf"):  # VideoFeedback ids share prefixes, so shard by the end
+        return root / "pre" / "vf" / video_id[-2:] / f"{video_id}.npz"
     return root / "pre" / video_id[:2] / f"{video_id}.npz"
 
 
-def extract(src: str) -> dict:
+def extract(src: str, fps: int = FPS, window_s: int = WINDOW_S) -> dict:
     """Frames as concatenated JPEG bytes plus offsets, audio as int16 PCM."""
     scale = (f"scale='if(gt(iw,ih),{MAX_SIDE},-2)':'if(gt(iw,ih),-2,{MAX_SIDE})'")
     with tempfile.TemporaryDirectory() as tmp:
         subprocess.run(
-            ["ffmpeg", "-v", "error", "-t", str(WINDOW_S), "-i", src,
-             "-vf", f"fps={FPS},{scale}", "-frames:v", str(FPS * WINDOW_S),
+            ["ffmpeg", "-v", "error", "-t", str(window_s), "-i", src,
+             "-vf", f"fps={fps},{scale}", "-frames:v", str(fps * window_s),
              "-q:v", "4", f"{tmp}/%03d.jpg"],
             check=True,
         )
         jpgs = [p.read_bytes() for p in sorted(pathlib.Path(tmp).glob("*.jpg"))]
     audio = subprocess.run(
-        ["ffmpeg", "-v", "error", "-t", str(WINDOW_S), "-i", src, "-vn", "-ac", "1",
+        ["ffmpeg", "-v", "error", "-t", str(window_s), "-i", src, "-vn", "-ac", "1",
          "-ar", str(SR), "-f", "s16le", "-"],
         capture_output=True, check=False,
     ).stdout
@@ -56,7 +58,7 @@ def extract(src: str) -> dict:
         "jpeg": np.frombuffer(b"".join(jpgs), dtype=np.uint8),
         "offsets": offsets,
         "audio": np.frombuffer(audio, dtype=np.int16),
-        "duration": np.float32(float(duration) if duration else len(jpgs) / FPS),
+        "duration": np.float32(float(duration) if duration else len(jpgs) / fps),
     }
 
 
