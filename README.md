@@ -21,7 +21,9 @@ The first benchmark is SnapUGC engagement prediction (ECR).
 | Modality dropout (train on A+V, V only, A only, text only views of each clip) | Idea: may make the model use audio; small test first |
 | Full run (30.6k clips, E006) | Stopped at step 2,440: collapsed under a long high-LR schedule |
 | Medium stability test, lower LR +/- vision LoRA (E008) | Done: stable at LoRA LR 3e-5, 0.677 alone, 0.714 with CLIP; vision LoRA no help |
-| Full run, LoRA LR 3e-5, 30.6k clips (E009) | Running |
+| Full run, LoRA LR 3e-5, 30.6k clips (E009) | Done: val 0.717, stable for the whole epoch |
+| Test split, scored once (E010) | Done: Omni 0.709 against CLIP 0.643 |
+| 3 seeds of the final recipe | Planned |
 | Learning-rate sweep + vision LoRA test (2k clips, E007) | Done: failures come from a high rate held for 400+ steps; vision LoRA promising |
 
 ## Results
@@ -30,11 +32,25 @@ Higher SROCC, PLCC and Final is better.
 Lower Brier and ECE is better.
 A uniform guess over 10 levels has Brier 0.900.
 
+### Headline (test split, 1,736 clips, scored once)
+
+| Model | Training clips | Input | SROCC | PLCC | Final | Brier | ECE |
+|---|---|---|---|---|---|---|---|
+| **Qwen3-Omni + typed head (E009)** | 30,631 | video + audio + text | 0.708 | 0.709 | **0.709** | **0.818** | **0.028** |
+| Omni + CLIP-MLP ensemble | 30,631 + ~27,600 | video + audio + text | 0.711 | 0.708 | 0.709 | 0.816 | 0.033 |
+| CLIP + MLP + temperature | ~27,600 | 8 frames | 0.645 | 0.642 | 0.643 | 0.843 | 0.034 |
+| CLIP + text + MLP + temperature | ~27,600 | 8 frames + text | 0.642 | 0.636 | 0.639 | 0.859 | 0.029 |
+| Text + XGBoost + temperature | ~27,600 | text | 0.348 | 0.347 | 0.347 | 0.884 | 0.029 |
+
+Omni beats CLIP + MLP by +0.065 final (95% paired bootstrap CI [0.041, 0.088]). One seed. See E010 in the log.
+
 ### Trained (val split, the same 500 clips for every row)
 
 | Model | Training clips | Input | SROCC | PLCC | Final | Brier | ECE |
 |---|---|---|---|---|---|---|---|
-| **Omni (E008) + CLIP-MLP-temperature ensemble** | 6,400 + ~27,600 | video + audio + text | 0.714 | 0.714 | **0.714** | **0.826** | 0.054 |
+| **Qwen3-Omni + typed head, full run (E009)** | 30,631 | video + audio + text | 0.717 | 0.717 | **0.717** | **0.808** | 0.032 |
+| Omni (E009) + CLIP-MLP-temperature ensemble | 30,631 + ~27,600 | video + audio + text | 0.727 | 0.724 | 0.726 | 0.813 | 0.032 |
+| Omni (E008) + CLIP-MLP-temperature ensemble | 6,400 + ~27,600 | video + audio + text | 0.714 | 0.714 | 0.714 | 0.826 | 0.054 |
 | Qwen3-Omni + typed head, LoRA LR 3e-5 (E008) | 6,400 | video + audio + text | 0.675 | 0.679 | 0.677 | 0.833 | 0.042 |
 | Same + vision LoRA (E008) | 6,400 | video + audio + text | | | 0.663 | 0.839 | **0.023** |
 | Qwen3-Omni + typed head (pilot) | 10,000 | video + audio + text | 0.655 | 0.652 | 0.654 | 0.839 | 0.035 |
@@ -46,8 +62,7 @@ A uniform guess over 10 levels has Brier 0.900.
 | CLIP + text + MLP | 30,631 | 8 frames + text | 0.613 | 0.612 | 0.612 | 1.136 | 0.465 |
 | Text + XGBoost | 30,631 | text | 0.336 | 0.316 | 0.326 | 0.899 | 0.055 |
 
-These are val numbers from one seed, and val chose the Omni checkpoint.
-The test split stays untouched until the final model.
+These are val numbers from one seed, and val chose the Omni checkpoints.
 
 ### Zero-shot (test split, 1,736 clips)
 
@@ -68,18 +83,17 @@ Rebuild them with `uv run python scripts/wandb_report.py` and `uv run python scr
 
 ## Findings so far
 
-1. A typed head on Qwen3-Omni, trained on 10,000 clips with audio, reaches val final 0.654. That passes our pre-set bar of 0.50.
-2. In the pilot, a cheap CLIP + MLP baseline with temperature scaling ranked slightly better (0.673) and is nearly as well calibrated (Brier 0.845 against 0.839). It trained on about 3x the data. It is the real bar.
-3. Without audio, the Omni model scores 0.628. The gap to the pilot (0.026) is inside the noise, so audio helps at most a little.
-4. An equal-weight ensemble of Omni (E008) and CLIP + MLP reaches 0.714, beating each by about 0.04 (both bootstrap intervals exclude zero). Omni carries signal CLIP misses (their predictions correlate at 0.79).
-5. Visual features carry most of the signal. Text alone reaches only 0.33.
-6. Zero-shot Clef-flash barely ranks engagement (final 0.13 to 0.17).
-7. Without training, video does not help. The zero-shot video runs predict close to uniform.
-8. Zero-shot text only is the most confident but badly calibrated (ECE 0.28).
-9. Only 32% of SnapUGC videos are still downloadable, and low-engagement videos are deleted more often. Mean ECR is 0.50 over all labels and 0.47 over the clips we have.
-10. Decoding video on the fly was 3.5x slower than the forward pass, so we decode every clip once up front.
-11. Long runs collapse when the LoRA rate stays near 1e-4. At 3e-5, an 800-step run is stable, and Omni on 6,400 clips (0.677) ties CLIP + MLP on 30,631 clips (E008).
-12. Vision LoRA did not help at 500 val clips (0.663 against 0.677), though it gave the lowest calibration error.
+1. **On the untouched test split, Qwen3-Omni + typed head reaches final 0.709, against 0.643 for CLIP + MLP trained on the same clips** (+0.065, 95% CI [0.041, 0.088]). It is also better calibrated (Brier 0.818 against 0.843, ECE 0.028). One seed so far (E010).
+2. Once Omni is fully trained, an ensemble with CLIP + MLP adds nothing on test (+0.001). Ensembles helped only weaker Omni models (E005, E008).
+3. Long runs collapse when the LoRA rate stays near 1e-4. At 3e-5, a full epoch is stable (E006 against E009).
+4. The low-rate end of the schedule matters: steps 2,400 to 3,200 added 0.014 val final and lowered Brier from 0.821 to 0.808 (E009).
+5. Without audio, the Omni model scores 0.628 against 0.654 with audio at 10,000 clips. The gap is inside the noise, so audio helps at most a little.
+6. Vision LoRA did not help at 500 val clips (0.663 against 0.677), though it gave the lowest calibration error (E008).
+7. Temperature scaling closes most of the calibration gap for cheap baselines (CLIP + MLP ECE 0.144 to 0.046 on val).
+8. Visual features carry most of the signal. Text alone reaches only 0.35 on test.
+9. Zero-shot Clef-flash barely ranks engagement (final 0.13 to 0.17). Without training, video does not help, and text only is badly calibrated (ECE 0.28).
+10. Only 32% of SnapUGC videos are still downloadable, and low-engagement videos are deleted more often. Mean ECR is 0.50 over all labels and 0.47 over the clips we have.
+11. Decoding video on the fly was 3.5x slower than the forward pass, so we decode every clip once up front.
 
 ## How it works
 

@@ -1,0 +1,55 @@
+{
+  "n": 500,
+  "models": [
+    "full-lr3e-5-30k-val500",
+    "baseline-clip-mlp-ts-val"
+  ],
+  "rows": {
+    "full-lr3e-5-30k-val500": {
+      "final": 0.717,
+      "srocc": 0.717,
+      "plcc": 0.717,
+      "brier": 0.808,
+      "ece": 0.032
+    },
+    "baseline-clip-mlp-ts-val": {
+      "final": 0.673,
+      "srocc": 0.673,
+      "plcc": 0.673,
+      "brier": 0.845,
+      "ece": 0.046
+    },
+    "ensemble (mean z / mean probs)": {
+      "final": 0.726,
+      "srocc": 0.727,
+      "plcc": 0.724,
+      "brier": 0.813,
+      "ece": 0.032
+    },
+    "ensemble (expected of mean probs)": {
+      "final": 0.729,
+      "srocc": 0.73,
+      "plcc": 0.728,
+      "brier": 0.813,
+      "ece": 0.032
+    }
+  },
+  "prediction_correlation": 0.841,
+  "paired_bootstrap_2000": {
+    "baseline-clip-mlp-ts-val minus full-lr3e-5-30k-val500": [
+      -0.044,
+      -0.082,
+      -0.005
+    ],
+    "ensemble minus full-lr3e-5-30k-val500": [
+      0.009,
+      -0.009,
+      0.028
+    ],
+    "ensemble minus baseline-clip-mlp-ts-val": [
+      0.053,
+      0.031,
+      0.075
+    ]
+  }
+}

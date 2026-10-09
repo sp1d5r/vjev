@@ -1,0 +1,55 @@
+{
+  "n": 1736,
+  "models": [
+    "baseline-text-xgb-ts-test",
+    "baseline-clip+text-mlp-ts-test"
+  ],
+  "rows": {
+    "baseline-text-xgb-ts-test": {
+      "final": 0.347,
+      "srocc": 0.348,
+      "plcc": 0.347,
+      "brier": 0.884,
+      "ece": 0.029
+    },
+    "baseline-clip+text-mlp-ts-test": {
+      "final": 0.639,
+      "srocc": 0.642,
+      "plcc": 0.636,
+      "brier": 0.859,
+      "ece": 0.029
+    },
+    "ensemble (mean z / mean probs)": {
+      "final": 0.573,
+      "srocc": 0.577,
+      "plcc": 0.57,
+      "brier": 0.859,
+      "ece": 0.034
+    },
+    "ensemble (expected of mean probs)": {
+      "final": 0.598,
+      "srocc": 0.602,
+      "plcc": 0.595,
+      "brier": 0.859,
+      "ece": 0.034
+    }
+  },
+  "prediction_correlation": 0.487,
+  "paired_bootstrap_2000": {
+    "baseline-clip+text-mlp-ts-test minus baseline-text-xgb-ts-test": [
+      0.291,
+      0.25,
+      0.332
+    ],
+    "ensemble minus baseline-text-xgb-ts-test": [
+      0.226,
+      0.203,
+      0.251
+    ],
+    "ensemble minus baseline-clip+text-mlp-ts-test": [
+      -0.065,
+      -0.086,
+      -0.045
+    ]
+  }
+}

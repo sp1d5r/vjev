@@ -67,11 +67,12 @@ RUN_NOTES = {
     "mid-lr3e-5-6k": "Stability test, 800 steps: lower learning rate (3e-5), no vision LoRA. "
                      "Passed, ended at 0.677. 0.714 when averaged with CLIP + MLP.",
     "full-lr3e-5-30k": "Full run on all 30,631 train clips with the E008 settings "
-                       "(learning rate 3e-5, no vision LoRA).",
+                       "(learning rate 3e-5, no vision LoRA). Best val 0.718. "
+                       "Test (scored once): 0.709, against 0.643 for CLIP + MLP.",
 }
 
 TRAIN_RUNS = "pilot|omni-.*-v2|sweep-|mid-|full-lr"  # name filter for real training runs
-VAL_COMPARE_RUNS = "baseline-|pilot-|mid-lr3e-5-6k"
+VAL_COMPARE_RUNS = "baseline-|pilot-|mid-lr3e-5-6k|full-lr3e-5-30k"
 ZERO_SHOT_RUNS = "zs-.*test1736"
 
 

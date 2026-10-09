@@ -7,66 +7,84 @@ They are not comparable to the VQualA 2025 leaderboard, whose test labels are wi
 
 ---
 
-## 2026-10-08 · E007 · Learning-rate sweep and vision LoRA
+## 2026-10-09 · E010 · Test split, scored once
 
-**Question:** which peak learning rate lets the model learn from the first steps without collapsing, and does adapting the vision tower help?
+**Question:** do the val results hold on the untouched test split?
 
-**Why:** with the fp32 head, E004 and E006 learned almost nothing while the LoRA learning rate was near its 1e-4 peak. The full run (E006) should have been preceded by a small test like this one.
+**Setup:** all 1,736 test clips (`sha256(Id) % 100 < 5`), scored once per final model.
+The models and the ensemble recipe were fixed before this run: E009 `best.pt` (step 3,200), the temperature-scaled baselines from E003 refit with the same seeds (their val numbers match exactly, T=2.036 for CLIP + MLP), and the equal-weight mean of z-scores.
+Commands: `predict_ckpt --run full-lr3e-5-30k --split test --limit 0 --final`, `simple_baselines.py::fit_all --calibrate --test`, `scripts/ensemble.py ... --out results/test_final.json`.
 
-**Setup:** 4 runs on the same 2,000 train clips (video + audio), scored on 200 val clips every 50 steps. 250 steps each, cosine schedule. About $4 each.
-Vision LoRA adds rank-64 adapters on `visual.blocks.N.attn.{qkv,proj}`. A 10-step smoke test confirmed they receive gradients (LoRA B norm 5.96, from 0). It trains about 30% slower.
+**Results** (test, 1,736 clips)
 
-**Results** (val final, 200 clips; spread in levels in brackets)
+| Model | SROCC | PLCC | Final | Brier | ECE |
+|---|---|---|---|---|---|
+| **Qwen3-Omni + typed head (E009)** | 0.708 | 0.709 | **0.709** | **0.818** | **0.028** |
+| Omni + CLIP-MLP ensemble (pre-set recipe) | 0.711 | 0.708 | 0.709 | 0.816 | 0.033 |
+| CLIP + MLP + temperature | 0.645 | 0.642 | 0.643 | 0.843 | 0.034 |
+| CLIP + text + MLP + temperature | 0.642 | 0.636 | 0.639 | 0.859 | 0.029 |
+| Text + XGBoost + temperature | 0.348 | 0.347 | 0.347 | 0.884 | 0.029 |
+| Zero-shot Clef-flash, video + text (E001) | 0.128 | 0.127 | 0.127 | 0.912 | 0.064 |
 
-| Step | LoRA 1e-4, head 3e-4 (control) | LoRA 3e-5 | LoRA 1e-5 | LoRA 3e-5 + vision LoRA |
-|---|---|---|---|---|
-| 50 | 0.536 (0.01) | 0.475 (0.01) | 0.470 (0.01) | 0.507 (0.01) |
-| 100 | 0.588 (0.00) | 0.498 (0.01) | 0.475 (0.01) | 0.538 (0.05) |
-| 150 | 0.578 (0.18) | 0.516 (0.06) | 0.497 (0.04) | 0.450 (0.05) |
-| 200 | 0.588 (0.04) | 0.524 (0.26) | 0.493 (0.10) | 0.545 (0.80) |
-| 250 | **0.586** (0.21) | 0.518 (0.47) | 0.490 (0.18) | 0.575 (1.02) |
-| Brier at 250 | 0.888 | 0.885 | 0.894 | **0.872** |
+Paired bootstrap (2,000 resamples) of the final-score gap:
+
+- Omni minus CLIP + MLP: **+0.065 [0.041, 0.088]**.
+- Ensemble minus Omni: +0.001 [-0.010, +0.012].
 
 **What we learned**
 
-- My hypothesis was wrong at this scale. Over 250 steps, the highest learning rate learns fastest. Lower rates are slower, not more stable.
-- So the failures in E004 and E006 are not "too high from step 1". They come after 400 to 800 steps at a still-high rate (see the table below). A 250-step test cannot show this, so it was the wrong test for that question.
-- Vision LoRA at 3e-5 beats plain 3e-5 by 0.057 and has the best Brier and spread. At n=200 (standard error about 0.05) this is suggestive, not proven.
-- The control also changes the head LR (3e-4 against 1e-4), so LoRA LR and head LR are confounded here.
+- The main claim holds on test. With the same training data, Omni + typed head ranks clearly better than CLIP + MLP, and its probabilities are better (Brier 0.818 against 0.843).
+- Val slightly flattered both models (0.717 to 0.709 for Omni, 0.673 to 0.643 for CLIP), as expected from choosing on val.
+- On test, the ensemble adds nothing. The E005 and E008 ensemble gains came from weaker Omni models. One model is enough.
+- One seed only. Seed variance is the next open question.
 
-Where each longer run went wrong (val final by step):
-
-| Run | Head | 400 | 600 | 800 | Then |
-|---|---|---|---|---|---|
-| E002 pilot, 1,250 steps | bf16 | 0.532 | 0.525 | 0.632 | 0.654 |
-| E004 v1 no audio | bf16 | 0.461 | 0.191 | NaN | stopped |
-| E004 v2 no audio, 1,250 steps | fp32 | 0.312 | 0.395 | 0.531 | 0.628 |
-| E006 v1 full | bf16 | 0.389 | - | NaN | stopped |
-| E006 v2 full, 3,829 steps | fp32 | 0.437 | - | 0.185 | 0.21 to 0.26 to step 2,000 |
-
-Every run is weak or unstable in the 400 to 800 step range while the LoRA rate is above about 7e-5. The short runs recover because their schedule decays quickly. The full run's schedule keeps the rate high for about 2,000 steps.
-
-**Cost:** about $17 for the four runs.
-
-**W&B runs:** `sweep-lr1e-4-2k`, `sweep-lr3e-5-2k`, `sweep-lr1e-5-2k`, `sweep-lr3e-5-vis-2k`.
+**Cost:** about $3.
 
 ---
 
-## 2026-10-08 · E009 · Full run, 30,631 clips, LoRA LR 3e-5 (running)
+## 2026-10-08 · E009 · Full run, 30,631 clips, LoRA LR 3e-5 (done)
 
 **Question:** with all train clips and the settings that passed E008, does Omni beat CLIP + MLP alone? Does the ensemble improve?
 
-**Setup:** video + audio, LoRA LR 3e-5, head LR 1e-4, no vision LoRA, 1 epoch (about 3,830 steps), scored on the same 500 val clips every 200 steps. App `ap-NNSpTEsWhLc0fOvdKo1U1i`.
-Estimated about 9 h and about $45.
+**Setup:** video + audio, LoRA LR 3e-5, head LR 1e-4, no vision LoRA, 1 epoch (3,829 steps, cosine to zero), scored on the same 500 val clips every 200 steps. App `ap-NNSpTEsWhLc0fOvdKo1U1i`. 7.5 h.
 
-**Risk:** E008 kept the rate near its peak for only about 300 steps. This run keeps it near 3e-5 for about 1,500 steps, which has not been tested.
+**Stop rule (set before results):** at step 800, val final 0.60 or more; after that, stop if two evals in a row are more than 0.05 below the best. Neither triggered.
 
-**Stop rule (set before results):**
+**Results** (val final, 500 clips; Brier in brackets)
 
-- At step 800, val final must be 0.60 or more (E008 had 0.677 at step 800).
-- After that, stop if two evals in a row are more than 0.05 below the best so far. `best.pt` is kept, so a late collapse still leaves the best checkpoint.
+| Step | Final | Step | Final |
+|---|---|---|---|
+| 200 | 0.428 (0.897) | 2,200 | 0.699 (0.818) |
+| 400 | 0.557 (0.877) | 2,400 | 0.704 (0.821) |
+| 600 | 0.642 (0.856) | 2,600 | 0.709 (0.816) |
+| 800 | 0.641 (0.847) | 2,800 | 0.714 (0.812) |
+| 1,000 | 0.660 (0.846) | 3,000 | 0.715 (0.808) |
+| 1,200 | 0.682 (0.829) | 3,200 | **0.718** (0.808), kept as `best.pt` |
+| 1,400 | 0.686 (0.825) | 3,400 | 0.717 (0.808) |
+| 1,600 | 0.672 (0.852) | 3,600 | 0.716 (0.808) |
+| 1,800 | 0.697 (0.829) | 3,800 | 0.716 (0.809) |
+| 2,000 | 0.700 (0.824) | | |
 
-**Results:** pending.
+No step or clip was skipped.
+
+Ensemble with CLIP + MLP (temperature-scaled) on the same 500 val clips (`results/ensemble_full_val500.json`):
+
+| Model | Final | Brier | ECE |
+|---|---|---|---|
+| Omni E009 | 0.717 | **0.808** | 0.032 |
+| CLIP + MLP, temperature-scaled | 0.673 | 0.845 | 0.046 |
+| Equal-weight ensemble | 0.726 | 0.813 | 0.032 |
+
+Paired bootstrap: Omni minus CLIP +0.044 [0.005, 0.082]; ensemble minus Omni +0.009 [-0.009, +0.028].
+
+**What we learned**
+
+- At LoRA LR 3e-5, a full epoch is stable. The rate, not the data size, caused the E006 collapse.
+- With the same training data, Omni beats CLIP + MLP alone on val.
+- The low-rate tail helped: steps 2,400 to 3,200 added 0.014 to final and lowered Brier from 0.821 to 0.808.
+- The ensemble gain shrinks as Omni gets stronger (+0.009, inside the noise).
+
+**Cost:** about $43 including scoring (billed $113.21 before, $155.91 after).
 
 **W&B run:** `full-lr3e-5-30k`.
 
@@ -129,6 +147,51 @@ Prediction correlation between Omni and CLIP: 0.79 (0.82 for the pilot).
 - Caveat: the checkpoint (best of 8 evals) and the ensemble were chosen on these val clips, so 0.714 is slightly optimistic. The test split will give the honest number.
 
 **Cost:** about $18 for both runs and scoring (billed $95.34 before, $113.21 after).
+
+---
+
+## 2026-10-08 · E007 · Learning-rate sweep and vision LoRA
+
+**Question:** which peak learning rate lets the model learn from the first steps without collapsing, and does adapting the vision tower help?
+
+**Why:** with the fp32 head, E004 and E006 learned almost nothing while the LoRA learning rate was near its 1e-4 peak. The full run (E006) should have been preceded by a small test like this one.
+
+**Setup:** 4 runs on the same 2,000 train clips (video + audio), scored on 200 val clips every 50 steps. 250 steps each, cosine schedule. About $4 each.
+Vision LoRA adds rank-64 adapters on `visual.blocks.N.attn.{qkv,proj}`. A 10-step smoke test confirmed they receive gradients (LoRA B norm 5.96, from 0). It trains about 30% slower.
+
+**Results** (val final, 200 clips; spread in levels in brackets)
+
+| Step | LoRA 1e-4, head 3e-4 (control) | LoRA 3e-5 | LoRA 1e-5 | LoRA 3e-5 + vision LoRA |
+|---|---|---|---|---|
+| 50 | 0.536 (0.01) | 0.475 (0.01) | 0.470 (0.01) | 0.507 (0.01) |
+| 100 | 0.588 (0.00) | 0.498 (0.01) | 0.475 (0.01) | 0.538 (0.05) |
+| 150 | 0.578 (0.18) | 0.516 (0.06) | 0.497 (0.04) | 0.450 (0.05) |
+| 200 | 0.588 (0.04) | 0.524 (0.26) | 0.493 (0.10) | 0.545 (0.80) |
+| 250 | **0.586** (0.21) | 0.518 (0.47) | 0.490 (0.18) | 0.575 (1.02) |
+| Brier at 250 | 0.888 | 0.885 | 0.894 | **0.872** |
+
+**What we learned**
+
+- My hypothesis was wrong at this scale. Over 250 steps, the highest learning rate learns fastest. Lower rates are slower, not more stable.
+- So the failures in E004 and E006 are not "too high from step 1". They come after 400 to 800 steps at a still-high rate (see the table below). A 250-step test cannot show this, so it was the wrong test for that question.
+- Vision LoRA at 3e-5 beats plain 3e-5 by 0.057 and has the best Brier and spread. At n=200 (standard error about 0.05) this is suggestive, not proven.
+- The control also changes the head LR (3e-4 against 1e-4), so LoRA LR and head LR are confounded here.
+
+Where each longer run went wrong (val final by step):
+
+| Run | Head | 400 | 600 | 800 | Then |
+|---|---|---|---|---|---|
+| E002 pilot, 1,250 steps | bf16 | 0.532 | 0.525 | 0.632 | 0.654 |
+| E004 v1 no audio | bf16 | 0.461 | 0.191 | NaN | stopped |
+| E004 v2 no audio, 1,250 steps | fp32 | 0.312 | 0.395 | 0.531 | 0.628 |
+| E006 v1 full | bf16 | 0.389 | - | NaN | stopped |
+| E006 v2 full, 3,829 steps | fp32 | 0.437 | - | 0.185 | 0.21 to 0.26 to step 2,000 |
+
+Every run is weak or unstable in the 400 to 800 step range while the LoRA rate is above about 7e-5. The short runs recover because their schedule decays quickly. The full run's schedule keeps the rate high for about 2,000 steps.
+
+**Cost:** about $17 for the four runs.
+
+**W&B runs:** `sweep-lr1e-4-2k`, `sweep-lr3e-5-2k`, `sweep-lr1e-5-2k`, `sweep-lr3e-5-vis-2k`.
 
 ---
 
