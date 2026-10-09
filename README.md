@@ -72,7 +72,17 @@ These are val numbers from one seed, and val chose the Omni checkpoints.
 | Clef-flash | No | text only | 0.175 | 0.168 | 0.172 | 1.037 | 0.278 |
 | Clef-flash | No | video only | 0.142 | 0.139 | 0.140 | 0.910 | 0.051 |
 
-For context, trained models in the VQualA 2025 challenge reach a final score of 0.66 to 0.71 on the official test set.
+For context, the VQualA 2025 challenge ([arXiv 2509.02969](https://arxiv.org/abs/2509.02969)) leaderboard on its official test set:
+
+| Rank | Team | Final | SROCC | PLCC |
+|---|---|---|---|---|
+| 1 | ECNU-SJTU VQA (ensemble of 4 VLMs, with audio) | 0.710 | 0.707 | 0.714 |
+| 2 | IMCL-DAMO | 0.698 | 0.696 | 0.702 |
+| 3 | HKUST-Cardiff-MI-BAAI | 0.680 | 0.677 | 0.684 |
+| 4 | MCCE / EasyVQA | 0.667 | | |
+| - | Challenge baseline | about 0.66 | | |
+
+Our single Omni model scores 0.709 on our own test split, level with first place.
 Those numbers are not directly comparable, because the official test labels are withheld.
 We retrain the baselines on our exact split for a fair comparison. See [`EVALUATION.md`](EVALUATION.md).
 
