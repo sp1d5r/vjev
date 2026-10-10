@@ -7,6 +7,34 @@ They are not comparable to the VQualA 2025 leaderboard, whose test labels are wi
 
 ---
 
+## 2026-10-10 · G1a · Real or AI, matched input (done)
+
+**Question:** with length, shape and size hidden, does Omni + typed head tell real from generated video better than CLIP + MLP, on generators and sources it has not seen?
+
+**Setup:** GenVideo, 4 shards (4,796 clips, 10 generators), matched input (first 1.5 s, square crop, 256x256, no duration; see the finding below).
+One `noul` question. Train 3,652 clips, 1 epoch (454 steps), LoRA LR 3e-5, head LR 1e-4, video only.
+Cross-dataset test: the same question on all 1,860 VideoFeedback val clips (11% real), which come from other generators and other real sources (`vfai`).
+
+**Results**
+
+| Model | GenVideo val AUC | Cross-dataset AUC | Acc | Brier | ECE |
+|---|---|---|---|---|---|
+| CLIP + MLP + temperature | 0.997 | **0.934** | 0.912 | **0.138** | 0.046 |
+| Omni + typed head | 0.997 | 0.929 | 0.903 | 0.148 | **0.044** |
+
+**What we learned**
+
+- A tie. On these 2023-era generators the typed model adds nothing over CLIP, in domain or across datasets.
+- Real or AI on these sets is mostly a frame-level texture task, which CLIP features already capture.
+- This is not a good showcase for the typed model. A useful version needs modern generators (Sora, Veo, Kling class), and we have no open labelled set of them.
+- The held-out-generator test split is kept untouched for now.
+
+**Cost:** about $5 (training) plus $1 (cross-dataset scoring).
+
+**W&B run:** `g1a-gv-matched`. Predictions: `/data/preds/g1a-gv-matched-vfai-val.jsonl`.
+
+---
+
 ## 2026-10-10 · Finding · GenVideo real-or-AI has a format shortcut
 
 **What happened:** the first real-or-AI run (`g1a-gv-3k`) reached val AUC 0.995 after 50 steps, and the CLIP + MLP baseline reached 0.999.
