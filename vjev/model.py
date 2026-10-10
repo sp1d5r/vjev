@@ -36,13 +36,50 @@ class Encoded:
     audio: bool
 
 
+def moment_bins(n_frames: int, fps: float, bin_s: float | None = None) -> list[tuple[float, float]]:
+    """Time range of each option of a `moment` question. The video processor merges frames
+    in pairs, so the finest step is 2 / fps seconds."""
+    step = 2 / fps
+    groups = n_frames // 2
+    k = max(1, round((bin_s or step) / step))
+    return [(i * step, min(i + k, groups) * step) for i in range(0, groups, k)]
+
+
+def video_group_spans(ids: list[int], video_id: int) -> list[tuple[int, int]]:
+    """Contiguous runs of video tokens. Each run is one pair of frames, in time order; with
+    audio, audio runs sit between them."""
+    spans, start = [], None
+    for i, t in enumerate([*ids, -1]):
+        if t == video_id and start is None:
+            start = i
+        elif t != video_id and start is not None:
+            spans.append((start, i))
+            start = None
+    return spans
+
+
+def _moment_to_score(record: dict, n_frames: int, fps: float) -> tuple[dict, dict[str, list]]:
+    """A `moment` question becomes a `score` question with one option per time bin. Its option
+    spans are later moved onto that bin's video (and audio) tokens."""
+    questions, bins = {}, {}
+    for k, q in record["questions"].items():
+        if q["type"] == "moment":
+            b = moment_bins(n_frames, fps, q.get("bin_s"))
+            bins[k] = b
+            q = {"type": "score", "instructions": q["instructions"],
+                 "criteria": [f"{t0:g} to {t1:g} s" for t0, t1 in b]}
+        questions[k] = q
+    return {**record, "questions": questions}, bins
+
+
 def encode(processor, record: dict, frames: np.ndarray, audio: np.ndarray | None,
            fps: float = FPS) -> Encoded:
     """Encode text with Clef's format, then splice the media tokens in after the prefix."""
     tok = processor.tokenizer
-    base = cs.encode_record(tok, record)
     if len(frames) % 2:  # the video processor groups frames in pairs
         frames = frames[:-1]
+    record, bins = _moment_to_score(record, len(frames), fps)
+    base = cs.encode_record(tok, record)
     kwargs = {"fps": fps, "do_sample_frames": False, "return_tensors": "pt"}
     if audio is not None:
         n = int(len(frames) / fps * SR)
@@ -61,6 +98,20 @@ def encode(processor, record: dict, frames: np.ndarray, audio: np.ndarray | None
                 option_spans=tuple((a + m, b + m) for a, b in q.option_spans))
         for q in base.questions
     )
+    if bins:
+        groups = video_group_spans(media_ids, tok.convert_tokens_to_ids("<|video_pad|>"))
+        assert len(groups) == len(frames) // 2, (len(groups), len(frames))
+        step = 2 / fps
+        moved = []
+        for q in questions:
+            if q.question_id in bins:
+                spans = []
+                for t0, t1 in bins[q.question_id]:
+                    a, b = round(t0 / step), round(t1 / step)
+                    spans.append((p + groups[a][0], p + groups[b - 1][1]))
+                q = replace(q, option_spans=tuple(spans))
+            moved.append(q)
+        questions = tuple(moved)
     record_out = replace(base, input_ids=(*ids[:p], *media_ids, *ids[p:]), questions=questions)
     media = {}
     for k in MEDIA_KEYS:

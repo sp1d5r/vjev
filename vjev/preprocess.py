@@ -28,8 +28,8 @@ SHARD = 200
 
 
 def pre_path(root: pathlib.Path, video_id: str) -> pathlib.Path:
-    if video_id.startswith("vf"):  # VideoFeedback ids share prefixes, so shard by the end
-        return root / "pre" / "vf" / video_id[-2:] / f"{video_id}.npz"
+    if video_id[:2] in ("vf", "gv"):  # these ids share prefixes, so shard by the end
+        return root / "pre" / video_id[:2] / video_id[-2:] / f"{video_id}.npz"
     return root / "pre" / video_id[:2] / f"{video_id}.npz"
 
 
