@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Video Jev: findings and plan</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+  :root { --ink:#1c2230; --mute:#5b6475; --rule:#d9dde5; --soft:#f3f5f8; --accent:#1f5fbf; --good:#1e7a4c; --warn:#a4561a; }
+  @page { size: A4; margin: 16mm 15mm 16mm 15mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "IBM Plex Sans", system-ui, sans-serif; color: var(--ink); background: #fff; font-size: 10.2pt; line-height: 1.45; margin: 0; }
+  h1, h2, h3 { font-family: "Source Serif 4", Georgia, serif; text-wrap: balance; margin: 0; }
+  h1 { font-size: 24pt; line-height: 1.1; }
+  h2 { font-size: 15pt; margin-top: 18pt; padding-bottom: 3pt; border-bottom: 1.5px solid var(--ink); break-after: avoid; }
+  h3 { font-size: 11.5pt; margin-top: 11pt; break-after: avoid; }
+  p { margin: 5pt 0; max-width: 68ch; }
+  ul, ol { margin: 4pt 0; padding-left: 16pt; }
+  li { margin: 2pt 0; max-width: 70ch; }
+  .label { font-size: 7.5pt; letter-spacing: .09em; text-transform: uppercase; color: var(--mute); font-weight: 600; }
+  .sub { color: var(--mute); font-size: 11pt; margin-top: 6pt; }
+  .meta { display: flex; gap: 18pt; margin-top: 10pt; font-size: 8.5pt; color: var(--mute); }
+  table { border-collapse: collapse; width: 100%; margin: 6pt 0; font-size: 9pt; break-inside: avoid; }
+  th, td { text-align: left; padding: 3.5pt 6pt; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-weight: 600; font-size: 8pt; color: var(--mute); text-transform: uppercase; letter-spacing: .05em; border-bottom: 1.5px solid var(--ink); }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; font-family: "IBM Plex Mono", monospace; font-size: 8.6pt; }
+  tr.us td { background: #eaf1fc; font-weight: 600; }
+  code, .mono { font-family: "IBM Plex Mono", monospace; font-size: 8.6pt; }
+  .tldr { background: var(--soft); border-left: 3px solid var(--accent); padding: 8pt 12pt; margin-top: 14pt; }
+  .tldr li { max-width: none; }
+  .note { font-size: 8.5pt; color: var(--mute); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14pt; }
+  .two { break-inside: avoid; }
+  .two > div { min-width: 0; }
+  figure { margin: 8pt 0; break-inside: avoid; }
+  figcaption { font-size: 8.5pt; color: var(--mute); margin-top: 3pt; }
+  .flow { display: flex; align-items: stretch; gap: 4pt; margin: 8pt 0; break-inside: avoid; }
+  .box { flex: 1; border: 1px solid var(--rule); border-radius: 4pt; padding: 6pt; font-size: 8.3pt; background: #fff; }
+  .box b { display: block; font-size: 8.8pt; margin-bottom: 2pt; }
+  .arrow { align-self: center; color: var(--mute); font-size: 12pt; }
+  .tag { display: inline-block; font-size: 7.5pt; padding: 1pt 5pt; border-radius: 3pt; font-weight: 600; }
+  .t-now { background: #e3f3ea; color: var(--good); }
+  .t-new { background: #fbeee2; color: var(--warn); }
+  .phase { border: 1px solid var(--rule); border-radius: 4pt; padding: 7pt 10pt; margin: 6pt 0; break-inside: avoid; }
+  .phase h3 { margin-top: 0; display: flex; justify-content: space-between; gap: 8pt; }
+  .phase h3 span { font-family: "IBM Plex Mono", monospace; font-size: 8.5pt; font-weight: 400; color: var(--mute); }
+  .gate { font-size: 8.6pt; margin-top: 3pt; }
+  .gate b { color: var(--accent); }
+  .pb { break-before: page; }
+  svg text { font-family: "IBM Plex Sans", sans-serif; }
+</style>
+</head>
+<body>
+
+<div class="label">Research note · 10 October 2026</div>
+<h1>Video Jev: findings so far, and a plan to generalise</h1>
+<p class="sub">A typed, calibrated audio-visual model that answers structured questions about a video in one forward pass.</p>
+<div class="meta"><span>Repo: multimodal-jev</span><span>Compute: Modal (H200)</span><span>Spend to date: $156.75 billed</span></div>
+
+<div class="tldr">
+<div class="label">Summary</div>
+<ul>
+  <li>We trained Qwen3-Omni (30B MoE, 3B active) with LoRA and a typed answer head on SnapUGC, a dataset that records how many viewers keep watching short videos.</li>
+  <li>On 1,736 held-out test clips, it scores <b>0.709</b> (mean of Spearman and Pearson). That is +0.065 over our strongest baseline, a CLIP-based model (95% CI 0.041 to 0.088).</li>
+  <li>The best entry in the VQualA 2025 challenge scored 0.710 with an ensemble of four models. Our single model is level with it, but on a different test split, so we cannot yet claim parity.</li>
+  <li>Its probabilities are well calibrated (ECE 0.028). That means code can act on how confident it is, not just on the answer.</li>
+  <li>The same design can take any question written as yes/no, choice or score. To ask "when" questions (for example "when is the goal?"), we need one new question type. Section 5 is the plan.</li>
+</ul>
+</div>
+
+<h2>1. What the model sees</h2>
+<p>The model does not take raw mp4 files. Each video is decoded once, and the model reads the frames and audio together on one timeline.</p>
+<div class="flow">
+  <div class="box"><b>mp4 file</b>Any length, any codec.</div><div class="arrow">→</div>
+  <div class="box"><b>Decode (ffmpeg)</b>First 16 s, 2 frames per second, longest side 448 px, 16 kHz mono audio. Saved once to a cache.</div><div class="arrow">→</div>
+  <div class="box"><b>Jev record</b>State (for example title, prompt, duration) plus the questions, written as text in Jev form.</div><div class="arrow">→</div>
+  <div class="box"><b>Qwen3-Omni</b>Frames and audio are interleaved by timestamp, with the text after them. LoRA on the text attention.</div><div class="arrow">→</div>
+  <div class="box"><b>Typed head</b>From Clef: one logit per allowed answer, for every question. Softmax gives probabilities.</div>
+</div>
+<p>So "raw video" in the useful sense: pixels and sound, with no hand-made features.
+For SnapUGC the record also carries the title and description.
+For VideoFeedback it carries the text prompt that made the video.</p>
+
+<h3>Question types available today</h3>
+<table>
+<tr><th>Type</th><th>Output</th><th>Example</th><th>Status</th></tr>
+<tr><td><code>noul</code></td><td>P(yes), P(no)</td><td>"Does this video look AI-generated?" "Did the audience laugh?"</td><td><span class="tag t-now">works now</span></td></tr>
+<tr><td><code>choice</code></td><td>Probability per named option</td><td>"Which sport is this?" "Which part is funniest: start, middle or end?"</td><td><span class="tag t-now">works now</span></td></tr>
+<tr><td><code>score</code></td><td>Probability per ordered level</td><td>"How realistic are the hands, 1 to 4?" "What share of viewers keep watching?"</td><td><span class="tag t-now">works now</span></td></tr>
+<tr><td><code>moment</code></td><td>Probability per time step</td><td>"At what second does the goal go in?" "When is the funniest moment?"</td><td><span class="tag t-new">to build</span></td></tr>
+</table>
+<p class="note">Many questions share one forward pass, so asking ten questions costs about the same as asking one.</p>
+
+<h2>2. Results on SnapUGC</h2>
+<div class="two">
+<div>
+<h3>Test split, scored once (1,736 clips)</h3>
+<table>
+<tr><th>Model</th><th class="n">Final</th><th class="n">Brier</th><th class="n">ECE</th></tr>
+<tr class="us"><td>Qwen3-Omni + typed head</td><td class="n">0.709</td><td class="n">0.818</td><td class="n">0.028</td></tr>
+<tr><td>Omni + CLIP ensemble</td><td class="n">0.709</td><td class="n">0.816</td><td class="n">0.033</td></tr>
+<tr><td>CLIP frames + MLP</td><td class="n">0.643</td><td class="n">0.843</td><td class="n">0.034</td></tr>
+<tr><td>CLIP + text + MLP</td><td class="n">0.639</td><td class="n">0.859</td><td class="n">0.029</td></tr>
+<tr><td>Text only (XGBoost)</td><td class="n">0.347</td><td class="n">0.884</td><td class="n">0.029</td></tr>
+<tr><td>Clef-flash, no training</td><td class="n">0.127</td><td class="n">0.912</td><td class="n">0.064</td></tr>
+</table>
+<p class="note">Final = mean of Spearman and Pearson (higher is better). Brier and ECE: lower is better. A uniform guess over 10 levels has Brier 0.900.</p>
+</div>
+<div>
+<h3>Against the VQualA 2025 challenge</h3>
+<figure>
+<svg viewBox="0 0 600 230" width="100%" role="img" aria-label="Final scores: our model 0.709, challenge winner 0.710">
+  <g stroke="#d9dde5" stroke-width="1">
+    <line x1="160" y1="10" x2="160" y2="200"/><line x1="260" y1="10" x2="260" y2="200"/><line x1="360" y1="10" x2="360" y2="200"/><line x1="460" y1="10" x2="460" y2="200"/><line x1="560" y1="10" x2="560" y2="200"/>
+  </g>
+  <g font-size="12" fill="#5b6475" text-anchor="middle">
+    <text x="160" y="220">0.64</text><text x="260" y="220">0.66</text><text x="360" y="220">0.68</text><text x="460" y="220">0.70</text><text x="560" y="220">0.72</text>
+  </g>
+  <g font-size="13" fill="#1c2230" text-anchor="end">
+    <text x="150" y="29">1st ECNU-SJTU</text><text x="150" y="56" font-weight="600" fill="#1f5fbf">Ours (single)</text><text x="150" y="83">2nd IMCL-DAMO</text><text x="150" y="110">3rd HKUST</text><text x="150" y="137">4th MCCE</text><text x="150" y="164">Baseline</text><text x="150" y="191">CLIP (ours)</text>
+  </g>
+  <g>
+    <circle cx="510" cy="25" r="6" fill="#1c2230"/><circle cx="505" cy="52" r="7" fill="#1f5fbf"/><circle cx="450" cy="79" r="6" fill="#1c2230"/><circle cx="360" cy="106" r="6" fill="#1c2230"/><circle cx="295" cy="133" r="6" fill="#1c2230"/><circle cx="260" cy="160" r="6" fill="#8a93a3"/><circle cx="175" cy="187" r="6" fill="#8a93a3"/>
+  </g>
+  <g font-size="12" fill="#5b6475" font-family="IBM Plex Mono, monospace">
+    <text x="522" y="29">0.710</text><text x="518" y="56" fill="#1f5fbf">0.709</text><text x="462" y="83">0.698</text><text x="372" y="110">0.680</text><text x="307" y="137">0.667</text><text x="272" y="164">~0.66</text><text x="187" y="191">0.643</text>
+  </g>
+</svg>
+<figcaption>Axis starts at 0.64 to show the gaps. Challenge scores are on the official test set; ours are on our own held-out split. The winner ensembled three VideoLLaMA2 models and one Qwen2.5-VL model.</figcaption>
+</figure>
+</div>
+</div>
+
+<div class="two">
+<div>
+<h3>Training curve (full run, 30,631 clips)</h3>
+<figure>
+<svg viewBox="0 0 600 240" width="100%" role="img" aria-label="Validation score rises from 0.43 to 0.72 over 3,800 steps">
+  <g stroke="#d9dde5" stroke-width="1">
+    <line x1="50" y1="182.9" x2="590" y2="182.9"/><line x1="50" y1="128.6" x2="590" y2="128.6"/><line x1="50" y1="74.3" x2="590" y2="74.3"/><line x1="50" y1="20" x2="590" y2="20"/>
+  </g>
+  <g font-size="12" fill="#5b6475" text-anchor="end">
+    <text x="44" y="187">0.45</text><text x="44" y="133">0.55</text><text x="44" y="78">0.65</text><text x="44" y="24">0.75</text>
+  </g>
+  <g font-size="12" fill="#5b6475" text-anchor="middle">
+    <text x="50" y="230">200</text><text x="200" y="230">1,200</text><text x="350" y="230">2,200</text><text x="500" y="230">3,200</text><text x="590" y="230">3,800</text>
+  </g>
+  <line x1="50" y1="61.8" x2="590" y2="61.8" stroke="#8a93a3" stroke-dasharray="4 4"/>
+  <text x="585" y="56" font-size="12" fill="#5b6475" text-anchor="end">CLIP + MLP, val 0.673</text>
+  <polyline fill="none" stroke="#1f5fbf" stroke-width="2.5" points="50.0,194.8 80.0,124.8 110.0,78.6 140.0,79.2 170.0,68.9 200.0,56.9 230.0,54.7 260.0,62.3 290.0,48.8 320.0,47.1 350.0,47.7 380.0,45.0 410.0,42.3 440.0,39.5 470.0,39.0 500.0,37.4 530.0,37.9 560.0,38.5 590.0,38.5"/>
+  <circle cx="500" cy="37.4" r="4.5" fill="#1f5fbf"/>
+  <text x="500" y="28" font-size="12" fill="#1f5fbf" text-anchor="middle">best 0.718</text>
+</svg>
+<figcaption>Validation final score (500 clips) against training step. Learning rate follows a cosine to zero. Earlier runs at a higher rate collapsed; 3e-5 was stable.</figcaption>
+</figure>
+</div>
+<div>
+<h3>What we learned</h3>
+<ul>
+  <li><b>Training is what matters.</b> The same family of model with no training scores 0.13. Trained, it scores 0.71.</li>
+  <li><b>Learning rate decides stability.</b> A LoRA rate near 1e-4, held for 400+ steps, collapsed twice. 3e-5 trained cleanly for the full epoch.</li>
+  <li><b>Audio helps a little at most.</b> Removing audio cost 0.026 at 10k clips, inside the noise. A clean test is still open.</li>
+  <li><b>Ensembling stopped helping.</b> Adding CLIP helped weaker Omni models; on test it adds +0.001.</li>
+  <li><b>Calibration comes for free.</b> The loss (cross-entropy + Brier + ordinal distance) gives ECE near 0.03 with no extra step.</li>
+  <li><b>Limits:</b> one seed only; test split is ours, not the challenge's.</li>
+</ul>
+</div>
+</div>
+
+<h2>3. Latency, hardware and cost</h2>
+<table>
+<tr><th>Item</th><th>Value</th><th>Source</th></tr>
+<tr><td>Forward pass, one 16 s clip with audio</td><td class="n">about 290 ms</td><td>Measured, p50, batch 1, H200</td></tr>
+<tr><td>Speed against real time (16 s windows)</td><td class="n">about 55x</td><td>From the line above</td></tr>
+<tr><td>Training throughput, video + audio</td><td class="n">2,860 clips/h</td><td>Measured</td></tr>
+<tr><td>Training throughput, video only</td><td class="n">5,200 clips/h</td><td>Measured</td></tr>
+<tr><td>GPU cost on Modal</td><td class="n">about $4.80/h</td><td>Measured ($17 for 3.55 h)</td></tr>
+<tr><td>Inference cost per 1,000 clips</td><td class="n">about $0.40</td><td>Estimate: 290 ms × 1,000 at $4.80/h, decode excluded</td></tr>
+<tr><td>Memory, bf16 weights</td><td class="n">about 62 GB</td><td>Estimate: needs one 80 GB+ GPU (H100, A100 80 GB, H200)</td></tr>
+<tr><td>Memory, 8-bit / 4-bit</td><td class="n">~32 / ~17 GB</td><td>Estimate, not tested: 48 GB card / 24 GB consumer card</td></tr>
+<tr><td>Full training run (30k clips, 1 epoch)</td><td class="n">7.5 h, ~$43</td><td>Measured</td></tr>
+</table>
+<p><b>Long videos.</b> Cost grows with length, since every frame adds tokens.
+A 10 minute video at 2 fps has about 37 times the frames of a 16 s clip.
+Plan: split long videos into windows (for example 16 to 30 s, with overlap), score each window, then combine.
+The MoE design keeps per-token compute low (3B active), which is why a 30B model runs in under a third of a second.</p>
+<p><b>What a product needs.</b> One H100 or H200 can serve about 12,000 clips per hour at batch 1, and more with batching.
+For live use (for example spotting a goal), 16 s windows score well ahead of real time on one GPU.</p>
+
+<h2>4. Is this new?</h2>
+<p>Parts of this exist. The combination is what we have not found.</p>
+<table>
+<tr><th>Prior work</th><th>What it does</th><th>What it lacks</th></tr>
+<tr><td>VideoScore (TIGER-Lab, 2024)</td><td>Scores AI videos on 5 fixed dimensions with a regression head.</td><td>Fixed questions, no audio, no probabilities.</td></tr>
+<tr><td>VQualA 2025 entries</td><td>Predict engagement with video-language model ensembles.</td><td>One task, one number, no calibration, several models.</td></tr>
+<tr><td>Timestamp models (TimeChat, Qwen2.5-VL and others)</td><td>Generate timestamps as text.</td><td>No probability over time, one answer per generation.</td></tr>
+<tr><td>Likelihood scoring of choices</td><td>Score several choice answers in one pass.</td><td>Text-like answers only, not trained for calibration.</td></tr>
+<tr><td>Clef-flash (Cloudflare)</td><td>Typed head over images and video for Jev questions.</td><td>No audio; on SnapUGC it scores 0.13 untrained.</td></tr>
+</table>
+<p><b>Our candidate claim:</b> one audio-visual model that answers any question written in Jev form (yes/no, choice, score, and soon moment), many per forward pass, with calibrated probabilities, trained jointly across tasks.
+The strongest version of the claim: it answers <i>new questions it was not trained on</i>, written at test time.
+A proper literature review is step one, before we state this in a paper.</p>
+
+<h2>5. Plan to generalise</h2>
+<p>Each phase has a small test first, and a gate that decides whether to continue.
+Costs are GPU estimates at the rates in section 3.</p>
+
+<div class="phase">
+<h3>G0 · AI-video quality (VideoFeedback) <span>~$6 small · ~$30 full</span></h3>
+<p>5 score questions per clip: visual quality, temporal consistency, motion, prompt match, physics and anatomy. 37.6k clips, Apache-2.0. Already downloaded, indexed and half decoded.</p>
+<div class="gate"><b>Gate:</b> the small run (2k clips) reaches average Spearman 60 or more on the official test. The full run targets VideoScore's 77.1. GPT-4o scores 23.</div>
+</div>
+
+<div class="phase">
+<h3>G1 · "Does this look AI?" and anatomy <span>~$15</span></h3>
+<p>Add <code>noul</code> questions for real against generated (GenVidBench and similar) and hand or body faults. Train jointly with G0 in one model.</p>
+<div class="gate"><b>Gate:</b> joint model keeps G0 scores within 0.02, and beats a CLIP baseline on real-vs-AI accuracy and calibration.</div>
+</div>
+
+<div class="phase">
+<h3><div>G2 · New question type: <code>moment</code></div> <span>~2 days of code · ~$20</span></h3>
+<p>The video tokens already sit in time order, each tied to a timestamp. The head scores each time step against the question and returns a probability over time. That answers "when" in one pass, with confidence, and with the option to report the top few moments.</p>
+<p>Data: QVHighlights (per-clip highlight scores and moment spans), Charades-STA (moment spans).</p>
+<div class="gate"><b>Gate:</b> within 5 points of published moment-retrieval models on QVHighlights (R1@0.5, mAP), using one shared model.</div>
+</div>
+
+<div class="phase">
+<h3>G3 · Sound and humour <span>~$20</span></h3>
+<p>Questions where audio should matter: "did this get a laugh?" (<code>noul</code>), "when is the laugh?" (<code>moment</code>), "which sound is this?" (<code>choice</code>).</p>
+<p>Data: SMILE and UR-FUNNY (laughter), FunQA (funny moments with timestamps), VGGSound or AudioSet (sound events). Sport: SoccerNet for goal timestamps (needs a signed agreement).</p>
+<div class="gate"><b>Gate:</b> removing audio drops these tasks clearly (unlike SnapUGC). This is the clean audio result we lack.</div>
+</div>
+
+<div class="phase">
+<h3>G4 · One joint model, and new questions at test time <span>~$60 to $100</span></h3>
+<p>Train one model on all tasks above plus SnapUGC. Hold out whole question families (for example, train on "is the hand realistic", test on "are the teeth realistic").</p>
+<div class="gate"><b>Gate:</b> on held-out questions it beats the same model untrained and an off-the-shelf model given the same question. This is the headline result for the paper.</div>
+</div>
+
+<div class="phase">
+<h3>G5 · Long video and speed <span>~$10</span></h3>
+<p>Window long videos and cache the encoder output, so new questions on a seen video cost only the head. Measure latency and cost per video hour.</p>
+</div>
+
+<h3>Rules that carry over</h3>
+<ul>
+  <li>Official test splits where they exist, scored once per final model. 3 seeds for headline numbers.</li>
+  <li>Every task gets a cheap baseline on the same split (CLIP + MLP at minimum).</li>
+  <li>Only data with a licence that allows research use. Many sets are built from YouTube, so we check each one and do not redistribute videos. No private data.</li>
+  <li>Log every run in <code>results/README.md</code> and W&amp;B, with cost.</li>
+</ul>
+
+<h3>Risks</h3>
+<ul>
+  <li><b>Tasks may fight.</b> Joint training can lower single-task scores. Mitigation: balance task sampling, check G1 gate.</li>
+  <li><b>Licences.</b> Some sets (SoccerNet, YouTube-based ones) limit use. Mitigation: start with Apache or CC sets.</li>
+  <li><b>Long-video cost.</b> Mitigation: windows, lower frame rate for slow questions, encoder cache.</li>
+  <li><b>Overclaiming novelty.</b> Mitigation: literature review before writing.</li>
+</ul>
+
+<h2>6. Budget and decisions</h2>
+<table>
+<tr><th>Phase</th><th class="n">GPU estimate</th></tr>
+<tr><td>G0 small test, then full</td><td class="n">$6 to $36</td></tr>
+<tr><td>G1 real-vs-AI and anatomy</td><td class="n">$15</td></tr>
+<tr><td>G2 moment type</td><td class="n">$20</td></tr>
+<tr><td>G3 sound and humour</td><td class="n">$20</td></tr>
+<tr><td>G4 joint model + held-out questions</td><td class="n">$60 to $100</td></tr>
+<tr><td>G5 long video</td><td class="n">$10</td></tr>
+<tr><td>SnapUGC: 3 seeds + same-split rerun of the challenge winner</td><td class="n">$90 to $120</td></tr>
+<tr><td><b>Total</b></td><td class="n"><b>about $220 to $320</b></td></tr>
+</table>
+<p><b>Decisions needed:</b></p>
+<ol>
+  <li>Raise the Modal spend limit (about $300 covers the whole plan with care).</li>
+  <li>Order: G0 then G2 (moment type, the most novel part), or G0 then G1 (AI detection, closest to Retina's needs).</li>
+  <li>Whether SnapUGC seeds and the challenge rerun come before or after G0.</li>
+</ol>
+
+</body>
+</html>
