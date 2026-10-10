@@ -7,6 +7,57 @@ They are not comparable to the VQualA 2025 leaderboard, whose test labels are wi
 
 ---
 
+## 2026-10-10 · G0, G2a, G3c/d · VideoFeedback full, QVHighlights small, VGGSound audio test
+
+**G0, VideoFeedback full run (`g0-vf-full`).**
+1 epoch on all of train (4,381 steps), 5 score questions per clip.
+The workspace hit its spend limit at about step 4,000, so the run stopped before the end.
+The best checkpoint (step 4,000) is saved.
+The official test set is not scored yet; it needs about $3 after the top-up.
+
+| Val (500 clips) | Spearman | Pearson | Brier | ECE |
+|---|---|---|---|---|
+| Visual quality | 0.825 | 0.861 | 0.376 | 0.041 |
+| Temporal consistency | 0.822 | 0.848 | 0.391 | 0.044 |
+| Dynamic degree | 0.664 | 0.778 | 0.189 | 0.055 |
+| Text alignment | 0.630 | 0.688 | 0.491 | 0.048 |
+| Factual consistency | 0.831 | 0.859 | 0.362 | 0.025 |
+| Mean | 0.755 | 0.807 | 0.362 | 0.043 |
+
+VideoScore reports a mean Spearman of 0.771 on test.
+Val went from 0.740 (step 1,600) to 0.755 (step 4,000), so gains were flattening.
+
+**G2a, QVHighlights small run (`g2a-qv-2k`).**
+2,000 train queries, 250 steps, 1 fps, 150 s, audio on.
+
+| Val (356 queries) | HIT@1 | R1@0.5 | R1@0.7 | mIoU |
+|---|---|---|---|---|
+| Uniform guess | 0.089 | 0.121 | - | 0.263 |
+| Zero-shot Omni (text answer) | 0.195 | 0.539 | - | 0.520 |
+| Omni + typed head (`g2a-qv-2k`) | 0.213 | 0.264 | 0.124 | 0.264 |
+
+The head slightly beats zero-shot on the top second (HIT@1) but is far worse on spans.
+Its distribution is too flat: the span around the peak is too wide.
+2,000 queries is about a third of train, and QV clips are 150 s with about 14.7k tokens each.
+Next: full train, or start from zero-shot spans, before we claim anything on QV.
+
+**G3c/d, VGGSound people sounds, with and without audio.**
+8 classes, 5,506 train clips, 1 epoch, a `choice` question.
+
+| Val (628 clips) | Accuracy | Brier | ECE | Forward ms (p50) |
+|---|---|---|---|---|
+| Chance | 0.125 | - | - | - |
+| Zero-shot Omni, audio | 0.659 | 0.538 | 0.220 | - |
+| Typed head, video only (`g3d-vs-v`) | 0.753 | 0.348 | 0.058 | 141 |
+| Typed head, audio + video (`g3c-vs-av`) | 0.817 | 0.264 | 0.021 | 206 |
+
+Audio adds 6.4 points of accuracy and halves calibration error.
+This is the first task where audio clearly helps; on FunQA it did not.
+
+**Cost:** about $35 for the four runs.
+
+---
+
 ## 2026-10-10 · Z001 · Zero-shot Qwen3-Omni on every task
 
 **Question:** what does the same backbone do with no training, asked each question as text? This is the "general video model" baseline for every task.
@@ -17,12 +68,12 @@ They are not comparable to the VQualA 2025 leaderboard, whose test labels are wi
 
 | Task | Clips | Zero-shot Omni | Trained (ours) | Other reference |
 |---|---|---|---|---|
-| VideoFeedback, avg Spearman (5 questions) | 500 | 0.366 | 0.740 (G0, step 1,600) | VideoScore 0.771 (test), GPT-4o 0.230 (test) |
+| VideoFeedback, avg Spearman (5 questions) | 500 | 0.366 | 0.755 (G0, step 4,000) | VideoScore 0.771 (test), GPT-4o 0.230 (test) |
 | FunQA moments, HIT@1 / R1@0.5 / mIoU | 400 | 0.545 / 0.295 / 0.350 | 0.807 / 0.580 / 0.538 (G3a) | position prior 0.533 / 0.135 / 0.190 |
-| QVHighlights, HIT@1 / R1@0.5 / mIoU | 356 | 0.195 / 0.539 / 0.520 | running (G2) | uniform 0.089 / 0.121 / 0.263 |
+| QVHighlights, HIT@1 / R1@0.5 / mIoU | 356 | 0.195 / 0.539 / 0.520 | 0.213 / 0.264 / 0.264 (G2a, 2k queries) | uniform 0.089 / 0.121 / 0.263 |
 | GenVideo real or AI, AUC | 203 | 0.736 | 0.997 (G1a) | CLIP 0.997 |
 | VideoFeedback real or AI, cross-dataset AUC | 1,860 | 0.916 | 0.929 (G1a) | CLIP 0.934 |
-| VGGSound people sounds, accuracy | 628 | 0.659 | running (G3c) | chance 0.125 |
+| VGGSound people sounds, accuracy | 628 | 0.659 | 0.817 (G3c, audio) | chance 0.125 |
 
 Zero-shot VideoFeedback per question (Spearman): visual quality 0.341, temporal 0.379, dynamic 0.218, text alignment 0.452, factual 0.442. Calibration is poor everywhere (ECE 0.18 to 0.56 for scores and choices).
 

@@ -26,6 +26,23 @@ The first benchmark is SnapUGC engagement prediction (ECR).
 | 3 seeds of the final recipe | Planned |
 | Learning-rate sweep + vision LoRA test (2k clips, E007) | Done: failures come from a high rate held for 400+ steps; vision LoRA promising |
 
+## Generalisation (G0 to G5)
+
+One head, many typed questions about raw video and sound.
+Val numbers; details in [results/README.md](results/README.md).
+
+| Task | Question type | Zero-shot Omni | Ours | Reference |
+|---|---|---|---|---|
+| VideoFeedback, 5 quality questions (G0) | score | 0.366 | 0.755 Spearman | VideoScore 0.771 (test) |
+| FunQA funny/creative/magic moment (G3a) | moment | 0.545 HIT@1 | 0.807 HIT@1 | position prior 0.533 |
+| QVHighlights, small run (G2a) | moment | 0.539 R1@0.5 | 0.264 R1@0.5 | needs the full run |
+| VGGSound people sounds (G3c) | choice | 0.659 acc | 0.817 acc (0.753 without audio) | chance 0.125 |
+| GenVideo real or AI (G1a) | yes/no | 0.736 AUC | 0.997 AUC | CLIP 0.997 |
+| Joint model, held-out wordings (G4) | all | | planned | |
+| Long video (G5) | all | | planned | |
+
+Related work: [docs/related_work.md](docs/related_work.md).
+
 ## Results
 
 Higher SROCC, PLCC and Final is better.
