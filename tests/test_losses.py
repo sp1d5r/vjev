@@ -22,3 +22,13 @@ def test_gradient_flows():
     typed_loss(logits, 2)["loss"].backward()
     assert logits.grad is not None
     assert logits.grad[2] < 0  # raising the target logit lowers the loss
+
+
+def test_soft_target_matches_onehot_and_prefers_mass_inside():
+    logits = torch.tensor([0.0, 2.0, 0.0])
+    a = typed_loss(logits, 1)["loss"]
+    b = typed_loss(logits, [0.0, 1.0, 0.0])["loss"]
+    assert torch.allclose(a, b)
+    inside = typed_loss(torch.tensor([0.0, 3.0, 3.0, 0.0]), [0, 0.5, 0.5, 0])["loss"]
+    outside = typed_loss(torch.tensor([3.0, 0.0, 0.0, 3.0]), [0, 0.5, 0.5, 0])["loss"]
+    assert inside < outside
