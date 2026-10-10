@@ -37,6 +37,14 @@ def pre_path(root: pathlib.Path, video_id: str) -> pathlib.Path:
     return root / "pre" / video_id[:2] / f"{video_id}.npz"
 
 
+def _seconds(text: str) -> float | None:
+    """ffprobe prints "N/A" when a container has no duration."""
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
 def extract(src: str, fps: float = FPS, window_s: int = WINDOW_S, max_side: int = MAX_SIDE) -> dict:
     """Frames as concatenated JPEG bytes plus offsets, audio as int16 PCM."""
     scale = (f"scale='if(gt(iw,ih),{max_side},-2)':'if(gt(iw,ih),-2,{max_side})'")
@@ -62,7 +70,7 @@ def extract(src: str, fps: float = FPS, window_s: int = WINDOW_S, max_side: int 
         "jpeg": np.frombuffer(b"".join(jpgs), dtype=np.uint8),
         "offsets": offsets,
         "audio": np.frombuffer(audio, dtype=np.int16),
-        "duration": np.float32(float(duration) if duration else len(jpgs) / fps),
+        "duration": np.float32(_seconds(duration) or len(jpgs) / fps),
     }
 
 
