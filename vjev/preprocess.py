@@ -28,10 +28,10 @@ SHARD = 200
 
 
 def pre_path(root: pathlib.Path, video_id: str) -> pathlib.Path:
-    if video_id.startswith("qv"):  # QVHighlights ids all end in ".0", so shard by a hash
+    if video_id[:2] in ("qv", "vs"):  # ids with fixed endings or prefixes: shard by a hash
         import hashlib
 
-        return root / "pre" / "qv" / hashlib.md5(video_id.encode()).hexdigest()[:2] / f"{video_id}.npz"
+        return root / "pre" / video_id[:2] / hashlib.md5(video_id.encode()).hexdigest()[:2] / f"{video_id}.npz"
     if video_id[:2] in ("vf", "gv", "fq"):  # these ids share prefixes, so shard by the end
         return root / "pre" / video_id[:2] / video_id[-2:] / f"{video_id}.npz"
     return root / "pre" / video_id[:2] / f"{video_id}.npz"

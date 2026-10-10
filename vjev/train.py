@@ -215,7 +215,7 @@ def train(cfg: dict) -> dict:
         for enc, item, _vid in train_dl:
             # One loss per question, averaged, so adding questions does not scale the rate.
             parts = [typed_loss(o, item.targets[q], cfg["smoothing"], cfg["brier_w"],
-                                cfg["emd_w"], ordinal=item.kinds[q] != "noul")
+                                cfg["emd_w"], ordinal=item.kinds[q] in ("score", "moment"))
                      for o, q in zip(net(enc), item.record["questions"], strict=True)]
             out = {k: sum(p[k] for p in parts) / len(parts) for k in parts[0]}
             micro += 1

@@ -10,6 +10,7 @@ and `noul` questions, and a distribution over time bins for `moment` questions.
     qv       moment (moment, one option per 2 s)            QVHighlights, text-query moments
     fq       moment (moment, one option per 1 s)            FunQA, funny / creative / magic moment
     vfai     ai_generated (noul) on VideoFeedback clips     cross-dataset test for gv
+    vs       sound (choice, 8 people sounds)                VGGSound, the clean audio test
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ from vjev.questions import VF_QUESTIONS, record_for, vf_record
 
 # Decode settings per task: (fps, uses audio). They must match how the clips were decoded.
 TASKS = {"snapugc": (2.0, True), "vf": (8.0, False), "gv": (8.0, False), "qv": (1.0, True),
-         "fq": (2.0, True), "vfai": (8.0, False)}
+         "fq": (2.0, True), "vfai": (8.0, False), "vs": (2.0, True)}
 # Tasks that reuse another task's index: vfai asks GenVideo's question of VideoFeedback clips.
 INDEX_OF = {"vfai": "vf"}
 # Real-or-AI tasks see the same length, shape and size for every clip. In GenVideo every real
@@ -128,6 +129,16 @@ def _make_item(task: str, rec: dict, n_frames: int, duration: float, edges: list
                     {"moment": "moment"},
                     {"moment": {"windows": rec["windows"],
                                 "bin_s": bins[0][1] - bins[0][0] if bins else 1.0}})
+    if task == "vs":
+        from vjev.vggsound import CLASSES
+
+        record = {"state": {}, "questions": {"sound": {
+            "type": "choice",
+            "instructions": "Which sound is most prominent in this clip?",
+            "criteria": dict(CLASSES)}}}
+        # choice options are sorted by key, so the target is the label's rank in that order.
+        return Item(record, fps, use_audio, {"sound": sorted(CLASSES).index(rec["label"])},
+                    {"sound": "choice"}, {"sound": {}})
     raise ValueError(f"unknown task {task}")
 
 
@@ -237,7 +248,17 @@ def score_report(probs: list[np.ndarray], extras: list[dict]) -> dict:
     return r
 
 
+def choice_report(probs: np.ndarray, target: np.ndarray) -> dict:
+    from vjev import metrics
+
+    acc = float((probs.argmax(1) == target).mean())
+    return {"acc": acc, "brier": metrics.brier(probs, target), "ece": metrics.ece(probs, target),
+            "final": acc, "n": len(target)}
+
+
 def question_report(kind: str, probs: list[np.ndarray], targets: list, extras: list[dict]) -> dict:
+    if kind == "choice":
+        return choice_report(np.array(probs), np.array(targets))
     if kind == "score":
         return score_report(probs, extras)
     if kind == "noul":

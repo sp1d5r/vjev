@@ -92,3 +92,13 @@ def test_window_target_and_windowed_hit():
     ex = {"windows": [[1.0, 2.0]], "bin_s": 1.0}
     r = moment_report([np.array([0.1, 0.8, 0.1])], [ex])
     assert r["hit1"] == 1.0 and r["miou"] == 1.0
+
+
+def test_choice_target_follows_sorted_option_order():
+    from vjev.clef_schema import question_options
+    from vjev.tasks import make_item
+
+    it = make_item("vs", {"id": "vsx", "label": "people crowd"}, 20, 10.0, [])
+    q = it.record["questions"]["sound"]
+    keys = [k for k, _ in question_options(q)]
+    assert keys[it.targets["sound"]] == "people crowd"
