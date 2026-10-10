@@ -35,6 +35,18 @@ The cross-dataset test (train on GenVideo, test on VideoFeedback's real and gene
 
 **Lesson:** probe every real-or-AI set for format differences before training. A baseline at 0.999 is a warning, not a result.
 
+**CLIP + MLP with the matched input** (fit on GenVideo train, temperature on 10% of train):
+
+| Test | Clips | AUC | Acc | Brier | ECE |
+|---|---|---|---|---|---|
+| GenVideo val (seen generators) | 203 | 0.997 | 0.975 | 0.038 | 0.018 |
+| VideoFeedback val, cross-dataset (`vfai`, 11% real) | 1,860 | 0.934 | 0.912 | 0.138 | 0.046 |
+
+Even with length, shape and size hidden, these 2023-era generators are easy to tell from real footage.
+Seen-generator real-or-AI is saturated, so it cannot rank models.
+The cross-dataset number is the useful one.
+A hard real-or-AI test needs modern generators, which neither set has.
+
 ---
 
 ## 2026-10-10 · V001 · VideoFeedback small test (G0, passed)
