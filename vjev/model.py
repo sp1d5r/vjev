@@ -45,17 +45,11 @@ def moment_bins(n_frames: int, fps: float, bin_s: float | None = None) -> list[t
     return [(i * step, min(i + k, groups) * step) for i in range(0, groups, k)]
 
 
-def video_group_spans(ids: list[int], video_id: int) -> list[tuple[int, int]]:
-    """Contiguous runs of video tokens. Each run is one pair of frames, in time order; with
-    audio, audio runs sit between them."""
-    spans, start = [], None
-    for i, t in enumerate([*ids, -1]):
-        if t == video_id and start is None:
-            start = i
-        elif t != video_id and start is not None:
-            spans.append((start, i))
-            start = None
-    return spans
+def video_group_spans(ids: list[int], video_id: int, per_group: int) -> list[tuple[int, int]]:
+    """Token span of each frame pair, in time order. Video tokens come in blocks of
+    per_group (grid h * w / 4); with audio, audio tokens sit between the blocks."""
+    pos = [i for i, t in enumerate(ids) if t == video_id]
+    return [(pos[i], pos[i + per_group - 1] + 1) for i in range(0, len(pos), per_group)]
 
 
 def _moment_to_score(record: dict, n_frames: int, fps: float) -> tuple[dict, dict[str, list]]:
@@ -99,7 +93,9 @@ def encode(processor, record: dict, frames: np.ndarray, audio: np.ndarray | None
         for q in base.questions
     )
     if bins:
-        groups = video_group_spans(media_ids, tok.convert_tokens_to_ids("<|video_pad|>"))
+        _t, h, w = (int(x) for x in out["video_grid_thw"][0])
+        groups = video_group_spans(media_ids, tok.convert_tokens_to_ids("<|video_pad|>"),
+                                   h * w // 4)
         assert len(groups) == len(frames) // 2, (len(groups), len(frames))
         step = 2 / fps
         moved = []

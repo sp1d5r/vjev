@@ -26,6 +26,28 @@ TASKS = {"snapugc": (2.0, True), "vf": (8.0, False), "gv": (8.0, False), "qv": (
          "fq": (2.0, True), "vfai": (8.0, False)}
 # Tasks that reuse another task's index: vfai asks GenVideo's question of VideoFeedback clips.
 INDEX_OF = {"vfai": "vf"}
+# Real-or-AI tasks see the same length, shape and size for every clip. In GenVideo every real
+# clip is 640x360, 24 fps and 10 s, and every generated clip is shorter and differently sized,
+# so without this the answer can be read off the clip length or aspect ratio.
+MATCHED = {"gv", "vfai"}
+MATCHED_FRAMES = 12  # 1.5 s at 8 fps; the shortest generated clips are 1.6 s
+MATCHED_SIDE = 256
+
+
+def prepare_frames(task: str, frames: np.ndarray) -> np.ndarray:
+    if task not in MATCHED:
+        return frames
+    from PIL import Image
+
+    f = frames[:MATCHED_FRAMES]
+    if len(f) < MATCHED_FRAMES:  # pad short clips by holding the last frame
+        f = np.concatenate([f, np.repeat(f[-1:], MATCHED_FRAMES - len(f), axis=0)])
+    h, w = f.shape[1:3]
+    side = min(h, w)
+    top, left = (h - side) // 2, (w - side) // 2
+    f = f[:, top:top + side, left:left + side]
+    return np.stack([np.asarray(Image.fromarray(x).resize((MATCHED_SIDE, MATCHED_SIDE),
+                                                          Image.BICUBIC)) for x in f])
 
 AI_QUESTION = {
     "type": "noul",
@@ -75,9 +97,8 @@ def _make_item(task: str, rec: dict, n_frames: int, duration: float, edges: list
                     dict.fromkeys(VF_QUESTIONS, "score"),
                     {k: {"raw": rec["scores"][k] - 1, "edges": [0.5, 1.5, 2.5]}
                      for k in VF_QUESTIONS})
-    if task in ("gv", "vfai"):
-        record = {"state": {"duration_seconds": round(duration, 1)},
-                  "questions": {"ai_generated": AI_QUESTION}}
+    if task in ("gv", "vfai"):  # no duration in the state: it gives the answer away
+        record = {"state": {}, "questions": {"ai_generated": AI_QUESTION}}
         # noul options are ordered (true, false), so index 0 means AI-generated.
         return Item(record, fps, use_audio, {"ai_generated": 0 if not rec["real"] else 1},
                     {"ai_generated": "noul"}, {"ai_generated": {"group": rec.get("generator", "vf")}})

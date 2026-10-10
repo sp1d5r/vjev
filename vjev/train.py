@@ -61,14 +61,15 @@ class ClipDataset:
         from transformers import Qwen3OmniMoeProcessor
 
         from vjev import model, preprocess
-        from vjev.tasks import make_item, task_of
+        from vjev.tasks import make_item, prepare_frames, task_of
 
         if self.processor is None:
             self.processor = Qwen3OmniMoeProcessor.from_pretrained(self.model_path)
         rec = self.recs[i]
         frames, audio, duration = preprocess.load(preprocess.pre_path(pathlib.Path(DATA), rec["id"]))
-        item = make_item(task_of(rec, self.task), rec, len(frames), duration, self.edges,
-                         self.audio)
+        task = task_of(rec, self.task)
+        frames = prepare_frames(task, frames)
+        item = make_item(task, rec, len(frames), duration, self.edges, self.audio)
         enc = model.encode(self.processor, item.record, frames, audio if item.audio else None,
                            fps=item.fps)
         return enc, item, rec["id"]

@@ -32,6 +32,7 @@ def embed_task(task: str, splits: tuple[str, ...] = ("train", "val", "test")) ->
     from transformers import CLIPModel, CLIPProcessor
 
     from vjev.preprocess import load, pre_path
+    from vjev.tasks import prepare_frames
     from vjev.train import _records
 
     root = pathlib.Path(DATA)
@@ -46,6 +47,7 @@ def embed_task(task: str, splits: tuple[str, ...] = ("train", "val", "test")) ->
 
         def frames(rec: dict) -> np.ndarray:
             f, _, _ = load(pre_path(root, rec["id"]))
+            f = prepare_frames(task, f)  # same matched input as the Omni model
             return f[np.linspace(0, len(f) - 1, FRAMES).round().astype(int)]
 
         feats = []
