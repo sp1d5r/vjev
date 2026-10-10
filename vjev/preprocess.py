@@ -32,7 +32,7 @@ def pre_path(root: pathlib.Path, video_id: str) -> pathlib.Path:
         import hashlib
 
         return root / "pre" / "qv" / hashlib.md5(video_id.encode()).hexdigest()[:2] / f"{video_id}.npz"
-    if video_id[:2] in ("vf", "gv"):  # these ids share prefixes, so shard by the end
+    if video_id[:2] in ("vf", "gv", "fq"):  # these ids share prefixes, so shard by the end
         return root / "pre" / video_id[:2] / video_id[-2:] / f"{video_id}.npz"
     return root / "pre" / video_id[:2] / f"{video_id}.npz"
 

@@ -81,3 +81,14 @@ def test_moment_hit_and_r1():
     assert abs(r["hit1"] - 2 / 3) < 1e-9
     assert r["r1_05"] == 1.0  # predicted span 2 to 6 s matches exactly
     assert abs(r["mass_in_moment"] - 0.9) < 1e-9
+
+
+def test_window_target_and_windowed_hit():
+    from vjev.tasks import window_target
+
+    bins = [(0.0, 1.0), (1.0, 2.0), (2.0, 3.0)]
+    assert window_target([[0.5, 1.5]], bins) == [0.5, 0.5, 0.0]
+    assert window_target([[1.2, 1.3]], bins)[1] == 1.0
+    ex = {"windows": [[1.0, 2.0]], "bin_s": 1.0}
+    r = moment_report([np.array([0.1, 0.8, 0.1])], [ex])
+    assert r["hit1"] == 1.0 and r["miou"] == 1.0

@@ -8,6 +8,7 @@ and `noul` questions, and a distribution over time bins for `moment` questions.
     vf       5 scores, 1 to 4                               VideoFeedback, AI-video quality
     gv       ai_generated (noul)                            GenVideo, real or generated
     qv       moment (moment, one option per 2 s)            QVHighlights, text-query moments
+    fq       moment (moment, one option per 1 s)            FunQA, funny / creative / magic moment
 """
 
 from __future__ import annotations
@@ -20,7 +21,8 @@ import numpy as np
 from vjev.questions import VF_QUESTIONS, record_for, vf_record
 
 # Decode settings per task: (fps, uses audio). They must match how the clips were decoded.
-TASKS = {"snapugc": (2.0, True), "vf": (8.0, False), "gv": (8.0, False), "qv": (1.0, True)}
+TASKS = {"snapugc": (2.0, True), "vf": (8.0, False), "gv": (8.0, False), "qv": (1.0, True),
+         "fq": (2.0, True)}
 
 AI_QUESTION = {
     "type": "noul",
@@ -88,7 +90,35 @@ def _make_item(task: str, rec: dict, n_frames: int, duration: float, edges: list
         return Item(record, fps, use_audio, {"moment": target}, {"moment": "moment"},
                     {"moment": {"saliency": saliency, "windows": rec["windows"],
                                 "bin_s": bins[0][1] - bins[0][0] if bins else 2.0}})
+    if task == "fq":
+        import hashlib
+
+        from vjev.model import moment_bins
+
+        bins = moment_bins(n_frames, fps)
+        # One phrasing per clip, fixed by its id, so val and test are stable.
+        k = int(hashlib.sha256(rec["id"].encode()).hexdigest(), 16) % len(rec["instructions"])
+        record = {"state": {"duration_seconds": round(duration, 1)},
+                  "questions": {"moment": {"type": "moment", "instructions": rec["instructions"][k]}}}
+        return Item(record, fps, use_audio, {"moment": window_target(rec["windows"], bins)},
+                    {"moment": "moment"},
+                    {"moment": {"windows": rec["windows"],
+                                "bin_s": bins[0][1] - bins[0][0] if bins else 1.0}})
     raise ValueError(f"unknown task {task}")
+
+
+def window_target(windows: list[list[float]], bins: list[tuple[float, float]]) -> list[float]:
+    """Each bin weighted by how much of it the answer windows cover. A window shorter than a
+    bin still marks the bin it falls in."""
+    w = np.zeros(len(bins))
+    for a, b in windows:
+        for i, (t0, t1) in enumerate(bins):
+            w[i] += max(0.0, min(b, t1) - max(a, t0))
+        if w.sum() == 0 and bins:  # window past the decoded part: mark the last bin
+            w[min(int(a // (bins[0][1] - bins[0][0])), len(bins) - 1)] = 1.0
+    if w.sum() == 0:
+        w = np.ones(max(1, len(bins)))
+    return (w / w.sum()).tolist()
 
 
 def qv_target(rec: dict, n_bins: int) -> tuple[list[float], list[list[float]]]:
@@ -149,20 +179,27 @@ def _iou(a: tuple[float, float], b: tuple[float, float]) -> float:
 def moment_report(probs: list[np.ndarray], extras: list[dict]) -> dict:
     """HIT@1 as in QVHighlights: the top bin is a hit for an annotator who rated it 4 (Very
     Good); averaged over the three annotators. R1@IoU uses the span around the peak."""
-    hits, r5, r7, mass = [], [], [], []
+    hits, r5, r7, mass, ious = [], [], [], [], []
     for p, ex in zip(probs, extras, strict=True):
-        k = int(p.argmax())
-        hits.append(np.mean([s == 4 for s in ex["saliency"][k]]))
+        k, bs = int(p.argmax()), ex["bin_s"]
+        if "saliency" in ex:
+            hits.append(np.mean([s == 4 for s in ex["saliency"][k]]))
+            rel = np.array([any(s) for s in ex["saliency"]])
+        else:  # no per-clip ratings: a hit is a peak bin that overlaps an answer window
+            rel = np.array([any(min(b, (i + 1) * bs) > max(a, i * bs) for a, b in ex["windows"])
+                            for i in range(len(p))])
+            hits.append(float(rel[k]))
         lo, hi = _span(p)
-        pred = (lo * ex["bin_s"], hi * ex["bin_s"])
+        pred = (lo * bs, hi * bs)
         best = max((_iou(pred, tuple(w)) for w in ex["windows"]), default=0.0)
+        ious.append(best)
         r5.append(best >= 0.5)
         r7.append(best >= 0.7)
-        rel = np.array([any(s) for s in ex["saliency"]])
         mass.append(float(p[rel].sum()) if rel.any() else 0.0)
     hit = float(np.mean(hits))
     return {"hit1": hit, "r1_05": float(np.mean(r5)), "r1_07": float(np.mean(r7)),
-            "mass_in_moment": float(np.mean(mass)), "final": hit, "n": len(probs)}
+            "miou": float(np.mean(ious)), "mass_in_moment": float(np.mean(mass)),
+            "final": hit, "n": len(probs)}
 
 
 def score_report(probs: list[np.ndarray], extras: list[dict]) -> dict:
