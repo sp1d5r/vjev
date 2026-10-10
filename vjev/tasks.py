@@ -9,6 +9,7 @@ and `noul` questions, and a distribution over time bins for `moment` questions.
     gv       ai_generated (noul)                            GenVideo, real or generated
     qv       moment (moment, one option per 2 s)            QVHighlights, text-query moments
     fq       moment (moment, one option per 1 s)            FunQA, funny / creative / magic moment
+    vfai     ai_generated (noul) on VideoFeedback clips     cross-dataset test for gv
 """
 
 from __future__ import annotations
@@ -22,7 +23,9 @@ from vjev.questions import VF_QUESTIONS, record_for, vf_record
 
 # Decode settings per task: (fps, uses audio). They must match how the clips were decoded.
 TASKS = {"snapugc": (2.0, True), "vf": (8.0, False), "gv": (8.0, False), "qv": (1.0, True),
-         "fq": (2.0, True)}
+         "fq": (2.0, True), "vfai": (8.0, False)}
+# Tasks that reuse another task's index: vfai asks GenVideo's question of VideoFeedback clips.
+INDEX_OF = {"vfai": "vf"}
 
 AI_QUESTION = {
     "type": "noul",
@@ -72,12 +75,12 @@ def _make_item(task: str, rec: dict, n_frames: int, duration: float, edges: list
                     dict.fromkeys(VF_QUESTIONS, "score"),
                     {k: {"raw": rec["scores"][k] - 1, "edges": [0.5, 1.5, 2.5]}
                      for k in VF_QUESTIONS})
-    if task == "gv":
+    if task in ("gv", "vfai"):
         record = {"state": {"duration_seconds": round(duration, 1)},
                   "questions": {"ai_generated": AI_QUESTION}}
         # noul options are ordered (true, false), so index 0 means AI-generated.
         return Item(record, fps, use_audio, {"ai_generated": 0 if not rec["real"] else 1},
-                    {"ai_generated": "noul"}, {"ai_generated": {"group": rec["generator"]}})
+                    {"ai_generated": "noul"}, {"ai_generated": {"group": rec.get("generator", "vf")}})
     if task == "qv":
         from vjev.model import moment_bins
 

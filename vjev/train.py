@@ -23,6 +23,9 @@ from vjev.common import DATA, HF, app, data_vol, hf_vol, train_image
 
 
 def _index_name(task: str, split: str) -> str:
+    from vjev.tasks import INDEX_OF
+
+    task = INDEX_OF.get(task, task)
     return split if task == "snapugc" else f"{task}_{split}"
 
 

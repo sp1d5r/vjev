@@ -2,7 +2,9 @@
 
     modal run vjev/predict.py::predict_ckpt --run pilot-omni-av-10k --split val --limit 500
 
-Writes /data/preds/{run}-{split}{limit}.jsonl with id, ecr, expected and probs per clip.
+Writes /data/preds/{run}-{split}{limit}.jsonl with the per-clip predictions.
+`--task` scores a different task than the run trained on (for example `vfai`, the
+cross-dataset real-or-AI test), and adds it to the file name.
 
 The test split is touched once per final model: pass --split test --limit 0 --final. It
 refuses to run if test predictions for that run already exist.
@@ -21,7 +23,7 @@ from vjev.common import DATA, HF, app, data_vol, hf_vol, train_image
 @app.function(image=train_image, gpu="H200", volumes={DATA: data_vol, HF: hf_vol},
               secrets=[modal.Secret.from_name("huggingface")], timeout=4 * 3600, cpu=12,
               memory=65536)
-def predict(run: str, split: str, limit: int) -> dict:
+def predict(run: str, split: str, limit: int, task: str = "") -> dict:
     import torch
     from huggingface_hub import snapshot_download
     from peft import set_peft_model_state_dict
@@ -30,7 +32,8 @@ def predict(run: str, split: str, limit: int) -> dict:
     from vjev.train import ClipDataset, _loader, _records, evaluate
 
     root = pathlib.Path(DATA)
-    out = root / "preds" / f"{run}-{split}{limit or ''}.jsonl"
+    tag = f"-{task}" if task else ""  # a task other than the one the run trained on
+    out = root / "preds" / f"{run}{tag}-{split}{limit or ''}.jsonl"
     if split == "test" and out.exists():
         raise RuntimeError(f"{out} exists; test is scored once per final model")
     ckpt = torch.load(root / "ckpt" / run / "best.pt", map_location="cuda", weights_only=False)
@@ -42,7 +45,7 @@ def predict(run: str, split: str, limit: int) -> dict:
     net.head.load_state_dict(ckpt["head"])
 
     edges = json.loads((root / "index" / "meta.json").read_text())["level_edges"]
-    task = cfg.get("task", "snapugc")
+    task = task or cfg.get("task", "snapugc")
     recs = _records(split, limit, cfg["seed"], task)
     loader = _loader(ClipDataset(recs, edges, path, cfg["audio"], task), shuffle=False, workers=8)
     res, rows = evaluate(net, loader, edges, task=task)
@@ -54,7 +57,8 @@ def predict(run: str, split: str, limit: int) -> dict:
 
 
 @app.local_entrypoint()
-def predict_ckpt(run: str, split: str = "val", limit: int = 500, final: bool = False):
+def predict_ckpt(run: str, split: str = "val", limit: int = 500, final: bool = False,
+                 task: str = ""):
     if split == "test" and not final:
         raise SystemExit("test is touched once per final model; pass --final to mean it")
-    print(json.dumps(predict.remote(run, split, limit), indent=2))
+    print(json.dumps(predict.remote(run, split, limit, task), indent=2))

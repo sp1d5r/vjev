@@ -3,6 +3,8 @@
     modal run vjev/clip_baseline.py::embed --task gv          # CLIP features, once per task
     modal run vjev/clip_baseline.py::fit --task gv            # fit on train, score on val
     modal run vjev/clip_baseline.py::fit --task gv --test     # also score test, once
+    modal run vjev/clip_baseline.py::embed --task vfai --val-only
+    modal run vjev/clip_baseline.py::fit --task gv --cross vfai   # train on gv, test on vf
 
 Features: CLIP ViT-L/14 on 8 evenly spaced frames, first frame plus frame mean (as in E003).
 Each question gets an MLP classifier (one hidden layer of 512) fit on 90% of train, and one
@@ -23,7 +25,7 @@ from vjev.simple_baselines import CLIP_MODEL, FRAMES, _scale, _temperature
 
 @app.function(image=baseline_image, gpu="L40S", cpu=8, memory=32768, timeout=3 * 3600,
               volumes={DATA: data_vol, HF: hf_vol})
-def embed_task(task: str) -> dict:
+def embed_task(task: str, splits: tuple[str, ...] = ("train", "val", "test")) -> dict:
     from concurrent.futures import ThreadPoolExecutor
 
     import torch
@@ -36,7 +38,7 @@ def embed_task(task: str) -> dict:
     clip = CLIPModel.from_pretrained(CLIP_MODEL, torch_dtype=torch.float16).cuda().eval()
     proc = CLIPProcessor.from_pretrained(CLIP_MODEL)
     counts = {}
-    for split in ("train", "val", "test"):
+    for split in splits:
         out = root / "feats" / f"{task}_{split}.npz"
         if out.exists():
             continue
@@ -64,7 +66,8 @@ def embed_task(task: str) -> dict:
 
 @app.function(image=baseline_image, cpu=16, memory=32768, timeout=3600,
               volumes={DATA: data_vol})
-def fit_task(task: str, test: bool = False) -> dict:
+def fit_task(task: str, test: bool = False, cross: str = "") -> dict:
+    """With cross (e.g. "vfai"), also score the classifiers on that task's val clips."""
     from sklearn.neural_network import MLPClassifier
     from sklearn.pipeline import make_pipeline
     from sklearn.preprocessing import StandardScaler
@@ -75,12 +78,14 @@ def fit_task(task: str, test: bool = False) -> dict:
     edges = json.loads((root / "index" / "meta.json").read_text())["level_edges"]
     splits = ["train", "val", *(["test"] if test else [])]
     data = {}
-    for s in splits:
-        z = np.load(root / "feats" / f"{task}_{s}.npz")
+    sources = [(s, task, s) for s in splits] + ([(f"{cross}_val", cross, "val")] if cross else [])
+    for key, t, s in sources:
+        z = np.load(root / "feats" / f"{t}_{s}.npz")
         recs = [json.loads(r) for r in z["recs"]]
         # n_frames and duration only matter for moment questions, which CLIP cannot answer.
-        items = [make_item(task, r, 2, 1.0, edges) for r in recs]
-        data[s] = (z["x"], items, recs)
+        items = [make_item(t, r, 2, 1.0, edges) for r in recs]
+        data[key] = (z["x"], items, recs)
+    splits = [k for k, _, _ in sources]
     x_tr, it_tr, _ = data["train"]
     n_fit = int(len(x_tr) * 0.9)
     results, preds = {}, {}
@@ -121,10 +126,10 @@ def fit_task(task: str, test: bool = False) -> dict:
 
 
 @app.local_entrypoint()
-def embed(task: str = "gv"):
-    print(embed_task.remote(task))
+def embed(task: str = "gv", val_only: bool = False):
+    print(embed_task.remote(task, ("val",) if val_only else ("train", "val", "test")))
 
 
 @app.local_entrypoint()
-def fit(task: str = "gv", test: bool = False):
-    print(json.dumps(fit_task.remote(task, test), indent=1, default=float))
+def fit(task: str = "gv", test: bool = False, cross: str = ""):
+    print(json.dumps(fit_task.remote(task, test, cross), indent=1, default=float))
