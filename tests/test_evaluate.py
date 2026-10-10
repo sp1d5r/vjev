@@ -102,3 +102,11 @@ def test_choice_target_follows_sorted_option_order():
     q = it.record["questions"]["sound"]
     keys = [k for k, _ in question_options(q)]
     assert keys[it.targets["sound"]] == "people crowd"
+
+
+def test_moment_map_perfect_and_wrong():
+    ex = {"windows": [[2.0, 6.0]], "bin_s": 2.0, "saliency": [[0, 0, 0], [4, 4, 4], [4, 4, 4], [0, 0, 0]]}
+    good = moment_report([np.array([0.0, 0.5, 0.5, 0.0])], [ex])
+    bad = moment_report([np.array([0.9, 0.0, 0.0, 0.1])], [ex])
+    assert good["map_05"] == 1.0 and good["map_avg"] == 1.0
+    assert bad["map_05"] == 0.0

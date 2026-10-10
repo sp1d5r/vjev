@@ -211,6 +211,54 @@ def _iou(a: tuple[float, float], b: tuple[float, float]) -> float:
     return inter / union if union > 0 else 0.0
 
 
+def _candidates(p: np.ndarray, bin_s: float, k: int = 10) -> list[tuple[float, float, float]]:
+    """Ranked (start, end, score) spans: one per local peak, grown to bins at 50% of that
+    peak, scored by the probability inside. Overlapping spans are dropped (IoU > 0.7)."""
+    peaks = [i for i in range(len(p))
+             if (i == 0 or p[i] >= p[i - 1]) and (i == len(p) - 1 or p[i] >= p[i + 1])]
+    out: list[tuple[float, float, float]] = []
+    for i in sorted(peaks, key=lambda j: -p[j]):
+        lo = hi = i
+        while lo > 0 and p[lo - 1] >= 0.5 * p[i]:
+            lo -= 1
+        while hi < len(p) - 1 and p[hi + 1] >= 0.5 * p[i]:
+            hi += 1
+        span = (lo * bin_s, (hi + 1) * bin_s, float(p[lo:hi + 1].sum()))
+        if all(_iou(span[:2], c[:2]) <= 0.7 for c in out):
+            out.append(span)
+        if len(out) == k:
+            break
+    return sorted(out, key=lambda c: -c[2])
+
+
+def _ap(preds: list[tuple[int, float, float, float]], gts: dict[int, list], thr: float) -> float:
+    """ActivityNet-style average precision pooled over all queries, as QVHighlights uses."""
+    n_gt = sum(len(v) for v in gts.values())
+    used = {q: [False] * len(v) for q, v in gts.items()}
+    tp = []
+    for q, a, b, _ in sorted(preds, key=lambda x: -x[3]):
+        ious = [_iou((a, b), tuple(w)) for w in gts[q]]
+        j = int(np.argmax(ious)) if ious else -1
+        if j >= 0 and ious[j] >= thr and not used[q][j]:
+            used[q][j] = True
+            tp.append(1)
+        else:
+            tp.append(0)
+    tp = np.array(tp)
+    if n_gt == 0 or len(tp) == 0:
+        return 0.0
+    ctp = np.cumsum(tp)
+    prec = ctp / np.arange(1, len(tp) + 1)
+    rec = ctp / n_gt
+    # interpolated: precision envelope, integrated over recall steps
+    prec = np.concatenate([[0], prec, [0]])
+    rec = np.concatenate([[0], rec, [1]])
+    for i in range(len(prec) - 2, -1, -1):
+        prec[i] = max(prec[i], prec[i + 1])
+    idx = np.where(rec[1:] != rec[:-1])[0] + 1
+    return float(np.sum((rec[idx] - rec[idx - 1]) * prec[idx]))
+
+
 def moment_report(probs: list[np.ndarray], extras: list[dict]) -> dict:
     """HIT@1 as in QVHighlights: the top bin is a hit for an annotator who rated it 4 (Very
     Good); averaged over the three annotators. R1@IoU uses the span around the peak."""
@@ -232,8 +280,13 @@ def moment_report(probs: list[np.ndarray], extras: list[dict]) -> dict:
         r7.append(best >= 0.7)
         mass.append(float(p[rel].sum()) if rel.any() else 0.0)
     hit = float(np.mean(hits))
+    preds = [(i, a, b, sc) for i, (p, ex) in enumerate(zip(probs, extras, strict=True))
+             for a, b, sc in _candidates(p, ex["bin_s"])]
+    gts = {i: ex["windows"] for i, ex in enumerate(extras)}
+    aps = {t: _ap(preds, gts, t) for t in np.round(np.arange(0.5, 0.96, 0.05), 2)}
     return {"hit1": hit, "r1_05": float(np.mean(r5)), "r1_07": float(np.mean(r7)),
             "miou": float(np.mean(ious)), "mass_in_moment": float(np.mean(mass)),
+            "map_05": aps[0.5], "map_075": aps[0.75], "map_avg": float(np.mean(list(aps.values()))),
             "final": hit, "n": len(probs)}
 
 
