@@ -7,6 +7,42 @@ They are not comparable to the VQualA 2025 leaderboard, whose test labels are wi
 
 ---
 
+## 2026-10-10 · G3 · FunQA moments, with and without audio (done)
+
+**Question:** can the new `moment` question type find when the funny, creative or magic moment happens? Does audio help?
+
+**Setup:** FunQA (CC BY-NC-SA 4.0), localisation tasks H1 (funny), C1 (creative), M1 (magic): 3,072 train videos, scored on 400 val videos.
+One `moment` question per video, worded as in FunQA (for example "Identify the video's funny moment."), with one option per second of video (2 fps, up to 60 s, 336 px).
+Each option's evidence is that second's video tokens (and its audio tokens when audio is on). The head is unchanged.
+Target: a distribution over seconds, weighted by overlap with the answer window. 1 epoch (384 steps), LoRA LR 3e-5, head LR 1e-4.
+The two runs differ only in audio.
+
+**Metrics:** HIT@1, the top second falls inside the answer window. R1@0.5, the span around the peak (bins at 50% or more of the peak) overlaps the answer with IoU 0.5 or more. mIoU of that span. Mass in moment, the probability on seconds inside the answer.
+Content-free baselines on the same clips come from `vjev/moment_baselines.py`.
+
+**Results** (val, 400 videos, final step)
+
+| Method | HIT@1 | R1@0.5 | mIoU | Mass in moment |
+|---|---|---|---|---|
+| Uniform guess | 0.435 | 0.320 | 0.380 | 0.454 |
+| Position prior (mean train target by position) | 0.533 | 0.135 | 0.190 | 0.484 |
+| Omni + typed head, video only (`g3b-fq-v2`) | 0.792 | 0.580 | 0.537 | 0.701 |
+| **Omni + typed head, video + audio (`g3a-fq-av`)** | **0.807** | **0.580** | **0.538** | **0.705** |
+
+Val by step (HIT@1, with audio / video only): 100: 0.750 / 0.762, 200: 0.785 / 0.800, 300: 0.795 / 0.800, 384: 0.807 / 0.792.
+
+**What we learned**
+
+- The `moment` type works with no change to the head: +27 points HIT@1 and +26 points R1@0.5 over the best content-free guess.
+- It gives a probability over time, so it can report the top few moments and how sure it is. A model that writes timestamps as text cannot.
+- Audio adds nothing here (all gaps within 0.015, inside the noise at n=400). FunQA moments are visual: pranks, tricks and magic.
+- So the clean audio test still needs a task where the answer is in the sound (laughter, speech, music).
+- We have not yet compared against published FunQA timestamp numbers; their metric definitions differ and need checking first. Test split untouched.
+
+**Cost:** about $8 for both runs.
+
+---
+
 ## 2026-10-10 · G1a · Real or AI, matched input (done)
 
 **Question:** with length, shape and size hidden, does Omni + typed head tell real from generated video better than CLIP + MLP, on generators and sources it has not seen?
