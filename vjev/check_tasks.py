@@ -15,7 +15,7 @@ from vjev.common import DATA, HF, app, data_vol, hf_vol, train_image
 
 @app.function(image=train_image, volumes={DATA: data_vol, HF: hf_vol}, cpu=8, memory=32768,
               timeout=1800)
-def check(task: str, n: int) -> list[dict]:
+def check(task: str, n: int, audio: bool = True) -> list[dict]:
     import pathlib
 
     from huggingface_hub import snapshot_download
@@ -28,7 +28,7 @@ def check(task: str, n: int) -> list[dict]:
     recs = []
     for t in task.split("+"):
         recs += _records("val", n, 0, t)
-    ds = ClipDataset(recs, edges, path, True, task)
+    ds = ClipDataset(recs, edges, path, audio, task)
     vid = None
     out = []
     for i in range(len(ds)):
@@ -54,6 +54,6 @@ def check(task: str, n: int) -> list[dict]:
 
 
 @app.local_entrypoint()
-def check_tasks(task: str = "vf+gv", n: int = 3):
-    for r in check.remote(task, n):
+def check_tasks(task: str = "vf+gv", n: int = 3, audio: bool = True):
+    for r in check.remote(task, n, audio):
         print(r)
