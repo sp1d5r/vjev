@@ -87,6 +87,7 @@ Those numbers are not directly comparable, because the official test labels are 
 We retrain the baselines on our exact split for a fair comparison. See [`EVALUATION.md`](EVALUATION.md).
 
 Full log of every experiment: [`results/README.md`](results/README.md).
+SnapUGC write-up (parked, stands alone): [`docs/snapugc_findings.md`](docs/snapugc_findings.md).
 Findings so far and the plan to generalise: [`docs/findings_and_plan.pdf`](docs/findings_and_plan.pdf) (source: [`docs/findings_and_plan.html`](docs/findings_and_plan.html)).
 Live charts in plain language: [W&B report](https://wandb.ai/sp1d5r/vjev/reports/vjev:-can-a-typed-model-predict-video-retention?--VmlldzoxODA3MzM0NQ==) (private).
 Runs page in plain language: ["Plain language" view](https://wandb.ai/sp1d5r/vjev?nw=hon9b3fyzh6) (private).
