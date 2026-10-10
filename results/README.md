@@ -7,6 +7,37 @@ They are not comparable to the VQualA 2025 leaderboard, whose test labels are wi
 
 ---
 
+## 2026-10-10 · Z001 · Zero-shot Qwen3-Omni on every task
+
+**Question:** what does the same backbone do with no training, asked each question as text? This is the "general video model" baseline for every task.
+
+**Setup:** `vjev/zeroshot.py`. Same clips, frames and audio as the trained runs. Scores, yes/no and choice questions read the next-token probabilities of the allowed answers ("1" to "4", "yes"/"no", "A" to "H"), so they get the same metrics. Moment questions ask for "start-end" seconds; the parsed span becomes a flat distribution.
+
+**Results** (val)
+
+| Task | Clips | Zero-shot Omni | Trained (ours) | Other reference |
+|---|---|---|---|---|
+| VideoFeedback, avg Spearman (5 questions) | 500 | 0.366 | 0.740 (G0, step 1,600) | VideoScore 0.771 (test), GPT-4o 0.230 (test) |
+| FunQA moments, HIT@1 / R1@0.5 / mIoU | 400 | 0.545 / 0.295 / 0.350 | 0.807 / 0.580 / 0.538 (G3a) | position prior 0.533 / 0.135 / 0.190 |
+| QVHighlights, HIT@1 / R1@0.5 / mIoU | 356 | 0.195 / 0.539 / 0.520 | running (G2) | uniform 0.089 / 0.121 / 0.263 |
+| GenVideo real or AI, AUC | 203 | 0.736 | 0.997 (G1a) | CLIP 0.997 |
+| VideoFeedback real or AI, cross-dataset AUC | 1,860 | 0.916 | 0.929 (G1a) | CLIP 0.934 |
+| VGGSound people sounds, accuracy | 628 | 0.659 | running (G3c) | chance 0.125 |
+
+Zero-shot VideoFeedback per question (Spearman): visual quality 0.341, temporal 0.379, dynamic 0.218, text alignment 0.452, factual 0.442. Calibration is poor everywhere (ECE 0.18 to 0.56 for scores and choices).
+
+**What we learned**
+
+- Training doubles VideoFeedback agreement (0.37 to 0.74) and lifts FunQA HIT@1 from 0.55 to 0.81.
+- Untrained Omni already beats GPT-4o on VideoFeedback (0.37 against 0.23).
+- On QVHighlights the untrained model already localises well (R1@0.5 0.54, about Moment-DETR's published 52.9 on test). It was likely trained on grounding data. This is the bar G2 must clear.
+- Zero-shot real-or-AI across datasets (0.916) is close to both trained models. The task is easy on these generators.
+- Zero-shot probabilities are badly calibrated; trained ones are not (ECE near 0.03 to 0.07).
+
+**Cost:** about $8 for all six.
+
+---
+
 ## 2026-10-10 · G3 · FunQA moments, with and without audio (done)
 
 **Question:** can the new `moment` question type find when the funny, creative or magic moment happens? Does audio help?
