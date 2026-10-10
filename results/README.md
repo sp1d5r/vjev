@@ -7,6 +7,44 @@ They are not comparable to the VQualA 2025 leaderboard, whose test labels are wi
 
 ---
 
+## 2026-10-10 · V001 · VideoFeedback small test (G0, passed)
+
+**Question:** does the SnapUGC recipe transfer to AI-video quality, with five typed questions per clip?
+
+**Setup:** VideoFeedback (TIGER-Lab, Apache-2.0), 2,000 train clips, 250 steps, scored on 300 val clips every 50 steps.
+Video only (the clips are silent), 8 fps, up to 6 s, longest side 448 px.
+Five `score` questions (1 to 4) per clip, all answered in one forward pass: visual quality, temporal consistency, dynamic degree, text-to-video alignment, factual consistency.
+LoRA LR 3e-5, head LR 1e-4, as E009.
+Val is 5% of the official train split (`sha256(id) % 100 < 5`), so these are not test numbers.
+
+**Gate (set before results):** average Spearman 0.60 or more on val.
+
+**Results** (val, 300 clips; Spearman per question)
+
+| Step | Visual quality | Temporal | Dynamic | Text align | Factual | Avg SROCC | Brier | ECE |
+|---|---|---|---|---|---|---|---|---|
+| 50 | 0.51 | 0.55 | 0.41 | 0.43 | 0.56 | 0.493 | 0.608 | 0.091 |
+| 100 | 0.62 | 0.65 | 0.46 | 0.48 | 0.66 | 0.573 | 0.545 | 0.093 |
+| 150 | 0.74 | 0.73 | 0.51 | 0.52 | 0.73 | 0.648 | 0.480 | 0.067 |
+| 200 | 0.74 | 0.74 | 0.53 | 0.51 | 0.72 | 0.648 | 0.471 | 0.058 |
+| 250 | **0.75** | **0.74** | **0.54** | **0.51** | **0.73** | **0.653** | **0.465** | 0.066 |
+| VideoScore (test, 37.6k train clips) | 0.862 | 0.803 | 0.776 | 0.594 | 0.821 | 0.771 | - | - |
+| GPT-4o (test, prompted) | | | | | | 0.230 | - | - |
+
+**What we learned**
+
+- Gate passed: 0.653 after 2,000 clips (about 6% of the train split).
+- Visual quality, temporal consistency and factual consistency are already within 0.07 to 0.11 of VideoScore.
+- Dynamic degree lags most (0.54 against 0.78). The 6 s cap is not the cause (clips are 1 to 3 s), so this is likely data volume.
+- Forward pass 170 ms per clip, 4,800 clips per hour in training.
+- Different splits: VideoScore numbers are on the official test set; ours are on val.
+
+**Cost:** about $3 (0.46 h on one H200 plus model load).
+
+**W&B run:** `v001-vf-2k`. Next: G0 full run on all 35,041 train clips (`g0-vf-full`).
+
+---
+
 ## 2026-10-09 · E010 · Test split, scored once
 
 **Question:** do the val results hold on the untouched test split?
