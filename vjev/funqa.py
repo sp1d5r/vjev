@@ -51,6 +51,7 @@ def fq_pull(split: str) -> dict:
 @app.function(image=vf_image, volumes={DATA: data_vol}, timeout=3600, cpu=8, memory=8192)
 def fq_build_index() -> dict:
     import collections
+    import re
     import subprocess
     from concurrent.futures import ThreadPoolExecutor
 
@@ -78,7 +79,7 @@ def fq_build_index() -> dict:
             rec = per_vid.setdefault(name, {"id": f"fq{name[:-4]}",
                                             "path": str(mp4[name].relative_to(root)),
                                             "kind": a["task"], "instructions": [],
-                                            "frames": json.loads(a["output"].replace(" ", ""))})
+                                            "frames": [int(x) for x in re.findall(r"\d+", a["output"])[:2]]})
             if a["instruction"] not in rec["instructions"]:
                 rec["instructions"].append(a["instruction"])
         recs = list(per_vid.values())
