@@ -7,6 +7,36 @@ They are not comparable to the VQualA 2025 leaderboard, whose test labels are wi
 
 ---
 
+## 2026-10-10 · Finding · GenVideo real-or-AI has a format shortcut
+
+**What happened:** the first real-or-AI run (`g1a-gv-3k`) reached val AUC 0.995 after 50 steps, and the CLIP + MLP baseline reached 0.999.
+That is too easy, so we probed every clip (`vjev/gv_stats.py`).
+
+| Source | Clips | Size | Frame rate | Length |
+|---|---|---|---|---|
+| Real | 2,440 | 640x360 (66%), 360x640, 640x362 | 24 fps | 10.0 to 10.2 s |
+| ST2V | 242 | 1280x720 | 10 fps | 7.2 s |
+| COG | 251 | 720x480 | 8 fps | 6.0 s |
+| SVD (held out) | 251 | 1024x576 | 7 fps | 3.6 s |
+| OpenSora (held out) | 245 | 512x512, 256x256 | 8 fps | 2.0 s |
+| Other 6 generators | 1,394 | 256x256 to 1088x640 | 8 to 25 fps | 1.6 to 4 s (ZeroScope up to 40 s) |
+
+Every real clip is 10 s long and every generated clip but a few ZeroScope ones is 7.2 s or shorter.
+Our record also put `duration_seconds` in the state.
+So the answer could be read off the length, and the held-out generators are just as short, so the held-out test was not safe either.
+
+**Fix (before any test scoring):** real-or-AI clips now all use the first 1.5 s (12 frames at 8 fps), a center square crop and 256x256 frames, and the state has no duration (`vjev/tasks.py::prepare_frames`).
+Every clip is now exactly 1,022 tokens.
+The CLIP baseline uses the same frames.
+`g1a-gv-3k` was stopped and is void. The rerun is `g1a-gv-matched`.
+
+**Still open:** resolution and compression differ by source even after resizing (real clips are upscaled from 360p).
+The cross-dataset test (train on GenVideo, test on VideoFeedback's real and generated clips, `vfai`) checks whether what the model learns carries over to other sources.
+
+**Lesson:** probe every real-or-AI set for format differences before training. A baseline at 0.999 is a warning, not a result.
+
+---
+
 ## 2026-10-10 · V001 · VideoFeedback small test (G0, passed)
 
 **Question:** does the SnapUGC recipe transfer to AI-video quality, with five typed questions per clip?
