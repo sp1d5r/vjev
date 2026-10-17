@@ -7,6 +7,34 @@ They are not comparable to the VQualA 2025 leaderboard, whose test labels are wi
 
 ---
 
+## 2026-10-17 · G0 test · VideoFeedback official test split, scored once
+
+**Setup:** `predict_ckpt --run g0-vf-full --split test --limit 0 --final`, checkpoint from step 4,000 (best val).
+All 760 clips of the official VideoFeedback test split, the same split VideoScore reports on.
+
+| Test (760 clips) | Ours, Spearman | VideoScore, Spearman |
+|---|---|---|
+| Visual quality | 0.847 | 0.862 |
+| Temporal consistency | **0.822** | 0.803 |
+| Dynamic degree | 0.706 | 0.776 |
+| Text alignment | **0.660** | 0.594 |
+| Factual consistency | **0.838** | 0.821 |
+| **Mean** | **0.775** | 0.771 |
+
+Mean Pearson 0.825, Brier 0.352, ECE 0.043.
+Forward pass 161 ms per clip (p50, H200).
+
+**What we learned**
+
+- One general recipe, with no task tuning, is level with (slightly above) the specialist VideoScore on its own benchmark.
+- Test (0.775) came in above val (0.755).
+- Dynamic degree remains the weakest question.
+- One seed.
+
+**Cost:** about $3.
+
+---
+
 ## 2026-10-10 · G0, G2a, G3c/d · VideoFeedback full, QVHighlights small, VGGSound audio test
 
 **G0, VideoFeedback full run (`g0-vf-full`).**
@@ -68,7 +96,7 @@ This is the first task where audio clearly helps; on FunQA it did not.
 
 | Task | Clips | Zero-shot Omni | Trained (ours) | Other reference |
 |---|---|---|---|---|
-| VideoFeedback, avg Spearman (5 questions) | 500 | 0.366 | 0.755 (G0, step 4,000) | VideoScore 0.771 (test), GPT-4o 0.230 (test) |
+| VideoFeedback, avg Spearman (5 questions) | 500 | 0.366 | 0.755 (G0, step 4,000); test 0.775 | VideoScore 0.771 (test), GPT-4o 0.230 (test) |
 | FunQA moments, HIT@1 / R1@0.5 / mIoU | 400 | 0.545 / 0.295 / 0.350 | 0.807 / 0.580 / 0.538 (G3a) | position prior 0.533 / 0.135 / 0.190 |
 | QVHighlights, HIT@1 / R1@0.5 / mIoU | 356 | 0.195 / 0.539 / 0.520 | 0.213 / 0.264 / 0.264 (G2a, 2k queries) | uniform 0.089 / 0.121 / 0.263 |
 | GenVideo real or AI, AUC | 203 | 0.736 | 0.997 (G1a) | CLIP 0.997 |

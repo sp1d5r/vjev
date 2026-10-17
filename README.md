@@ -33,7 +33,7 @@ Val numbers; details in [results/README.md](results/README.md).
 
 | Task | Question type | Zero-shot Omni | Ours | Reference |
 |---|---|---|---|---|
-| VideoFeedback, 5 quality questions (G0) | score | 0.366 | 0.755 Spearman | VideoScore 0.771 (test) |
+| VideoFeedback, 5 quality questions (G0) | score | 0.366 | 0.775 Spearman (test) | VideoScore 0.771 (test) |
 | FunQA funny/creative/magic moment (G3a) | moment | 0.545 HIT@1 | 0.807 HIT@1 | position prior 0.533 |
 | QVHighlights, small run (G2a) | moment | 0.539 R1@0.5 | 0.264 R1@0.5 | needs the full run |
 | VGGSound people sounds (G3c) | choice | 0.659 acc | 0.817 acc (0.753 without audio) | chance 0.125 |
