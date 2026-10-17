@@ -24,7 +24,8 @@ from vjev.common import DATA, HF, app, data_vol, hf_vol, train_image
 @app.function(image=train_image, gpu="H200", volumes={DATA: data_vol, HF: hf_vol},
               secrets=[modal.Secret.from_name("huggingface")], timeout=4 * 3600, cpu=12,
               memory=65536)
-def predict(run: str, split: str, limit: int, task: str = "", wording: str = "canonical") -> dict:
+def predict(run: str, split: str, limit: int, task: str = "", wording: str = "canonical",
+            held_out: bool | None = None) -> dict:
     import torch
     from huggingface_hub import snapshot_download
     from peft import set_peft_model_state_dict
@@ -35,6 +36,7 @@ def predict(run: str, split: str, limit: int, task: str = "", wording: str = "ca
     root = pathlib.Path(DATA)
     tag = f"-{task}" if task else ""  # a task other than the one the run trained on
     tag += f"-{wording}" if wording != "canonical" else ""
+    tag += "-noC1" if held_out else ""
     out = root / "preds" / f"{run}{tag}-{split}{limit or ''}.jsonl"
     if split == "test" and out.exists():
         raise RuntimeError(f"{out} exists; test is scored once per final model")
@@ -48,7 +50,9 @@ def predict(run: str, split: str, limit: int, task: str = "", wording: str = "ca
 
     edges = json.loads((root / "index" / "meta.json").read_text())["level_edges"]
     task = task or cfg.get("task", "snapugc")
-    recs = _records(split, limit, cfg["seed"], task, "", cfg.get("held_out", False))
+    # held_out=True scores a single-task run on the same clips as a G4 run (no FunQA creative).
+    held_out = cfg.get("held_out", False) if held_out is None else held_out
+    recs = _records(split, limit, cfg["seed"], task, "", held_out)
     loader = _loader(ClipDataset(recs, edges, path, cfg["audio"], task, wording), shuffle=False,
                      workers=8)
     res, rows = evaluate(net, loader, edges, task=task)
@@ -61,7 +65,7 @@ def predict(run: str, split: str, limit: int, task: str = "", wording: str = "ca
 
 @app.local_entrypoint()
 def predict_ckpt(run: str, split: str = "val", limit: int = 500, final: bool = False,
-                 task: str = "", wording: str = "canonical"):
+                 task: str = "", wording: str = "canonical", held_out: bool = False):
     if split == "test" and not final:
         raise SystemExit("test is touched once per final model; pass --final to mean it")
-    print(json.dumps(predict.remote(run, split, limit, task, wording), indent=2))
+    print(json.dumps(predict.remote(run, split, limit, task, wording, held_out or None), indent=2))
