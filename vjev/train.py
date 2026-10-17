@@ -29,18 +29,32 @@ def _index_name(task: str, split: str) -> str:
     return split if task == "snapugc" else f"{task}_{split}"
 
 
-def _records(split: str, limit: int, seed: int, task: str = "snapugc") -> list[dict]:
-    """`task` may join several with "+", e.g. "vf+gv+qv". `limit` applies to each task."""
+def _limits(limit: int, limits: str) -> dict[str, int]:
+    """Per-task limits like "vf=10000,qv=0" (0 means all); other tasks use `limit`."""
+    out = {}
+    for part in filter(None, limits.split(",")):
+        name, n = part.split("=")
+        out[name] = int(n)
+    return out
+
+
+def _records(split: str, limit: int, seed: int, task: str = "snapugc", limits: str = "",
+             held_out: bool = False) -> list[dict]:
+    """`task` may join several with "+", e.g. "vf+gv+qv". `limit` applies to each task, unless
+    `limits` sets one for it. `held_out` drops the held-out question family (see tasks.keep)."""
     from vjev.preprocess import pre_path
+    from vjev.tasks import keep
 
     root = pathlib.Path(DATA)
+    per_task = _limits(limit, limits)
     out = []
     for t in task.split("+"):
         lines = (root / "index" / f"{_index_name(t, split)}.jsonl").read_text().splitlines()
         recs = [json.loads(line) | {"task": t} for line in lines]
-        recs = [r for r in recs if pre_path(root, r["id"]).exists()]
+        recs = [r for r in recs if keep(t, r, held_out) and pre_path(root, r["id"]).exists()]
         random.Random(seed).shuffle(recs)
-        out += recs[:limit] if limit else recs
+        n = per_task.get(t, limit)
+        out += recs[:n] if n else recs
     random.Random(seed).shuffle(out)
     return out
 
@@ -49,10 +63,11 @@ class ClipDataset:
     """Map-style dataset. Each worker loads its own processor on first use."""
 
     def __init__(self, recs: list[dict], edges: list[float], model_path: str, audio: bool,
-                 task: str = "snapugc"):
+                 task: str = "snapugc", wording: str = "canonical"):
         self.recs, self.edges, self.model_path, self.audio = recs, edges, model_path, audio
-        self.task = task
+        self.task, self.wording = task, wording
         self.processor = None
+        self.rng = random.Random()
 
     def __len__(self) -> int:
         return len(self.recs)
@@ -69,7 +84,8 @@ class ClipDataset:
         frames, audio, duration = preprocess.load(preprocess.pre_path(pathlib.Path(DATA), rec["id"]))
         task = task_of(rec, self.task)
         frames = prepare_frames(task, frames)
-        item = make_item(task, rec, len(frames), duration, self.edges, self.audio)
+        item = make_item(task, rec, len(frames), duration, self.edges, self.audio,
+                         self.wording, self.rng)
         enc = model.encode(self.processor, item.record, frames, audio if item.audio else None,
                            fps=item.fps)
         return enc, item, rec["id"]
@@ -174,9 +190,12 @@ def train(cfg: dict) -> dict:
     ], weight_decay=0.01)
 
     task = cfg.get("task", "snapugc")
-    train_recs = _records("train", cfg["train_limit"], cfg["seed"], task)
-    val_recs = _records("val", cfg["val_limit"], cfg["seed"], task)
-    train_dl = _loader(ClipDataset(train_recs, edges, path, cfg["audio"], task), shuffle=True)
+    held_out = cfg.get("held_out", False)
+    train_recs = _records("train", cfg["train_limit"], cfg["seed"], task,
+                          cfg.get("train_limits", ""), held_out)
+    val_recs = _records("val", cfg["val_limit"], cfg["seed"], task, "", held_out)
+    train_dl = _loader(ClipDataset(train_recs, edges, path, cfg["audio"], task,
+                                   cfg.get("wording", "canonical")), shuffle=True)
     val_dl = _loader(ClipDataset(val_recs, edges, path, cfg["audio"], task), shuffle=False,
                      workers=4)
 
@@ -190,7 +209,8 @@ def train(cfg: dict) -> dict:
 
     sched = torch.optim.lr_scheduler.LambdaLR(opt, lr_scale)
     names = {"snapugc": "SnapUGC retention", "vf": "VideoFeedback (5 quality scores)",
-             "gv": "GenVideo (real or AI)", "qv": "QVHighlights (moments)"}
+             "gv": "GenVideo (real or AI)", "qv": "QVHighlights (moments)",
+             "fq": "FunQA (moments)", "vs": "VGGSound (sounds)"}
     what = " + ".join(names.get(t, t) for t in task.split("+"))
     notes = (f"{what}. Qwen3-Omni with "
              f"{'video and audio' if cfg['audio'] else 'video only (no audio)'}, "
@@ -280,7 +300,8 @@ def main(train_limit: int = 200, val_limit: int = 50, epochs: float = 1.0, max_s
          accum: int = 8, lr_lora: float = 1e-4, lr_head: float = 3e-4, lora_r: int = 64,
          lora_alpha: int = 128, smoothing: float = 0.05, brier_w: float = 1.0,
          emd_w: float = 1.0, eval_every: int = 100, audio: bool = True, seed: int = 0,
-         vision_lora: bool = False, task: str = "snapugc", run_name: str = ""):
+         vision_lora: bool = False, task: str = "snapugc", run_name: str = "",
+         train_limits: str = "", held_out: bool = False, wording: str = "canonical"):
     cfg = {k: v for k, v in locals().items()}
     cfg["run_name"] = run_name or (
         f"omni-{'av' if audio else 'v'}-n{train_limit}-r{lora_r}-{time.strftime('%m%d-%H%M')}")

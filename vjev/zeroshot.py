@@ -57,7 +57,7 @@ def _moment_probs(reply: str, n_bins: int, bin_s: float) -> np.ndarray:
 @app.function(image=train_image, gpu="H200", volumes={DATA: data_vol, HF: hf_vol},
               secrets=[modal.Secret.from_name("huggingface")],
               timeout=4 * 3600, cpu=12, memory=65536)
-def run(task: str, split: str, limit: int, audio: bool = True) -> dict:
+def run(task: str, split: str, limit: int, audio: bool = True, wording: str = "canonical") -> dict:
     import torch
     from huggingface_hub import snapshot_download
     from transformers import Qwen3OmniMoeForConditionalGeneration, Qwen3OmniMoeProcessor
@@ -84,7 +84,7 @@ def run(task: str, split: str, limit: int, audio: bool = True) -> dict:
         frames = prepare_frames(task, frames)
         if len(frames) % 2:
             frames = frames[:-1]
-        item = make_item(task, rec, len(frames), duration, edges, audio)
+        item = make_item(task, rec, len(frames), duration, edges, audio, wording)
         row = {"id": rec["id"], "scores": {}}
         for q, question in item.record["questions"].items():
             kind = item.kinds[q]
@@ -131,7 +131,8 @@ def run(task: str, split: str, limit: int, audio: bool = True) -> dict:
         rows.append(row)
     reports = {q: question_report(g["kind"], g["probs"], g["target"], g["extra"])
                for q, g in groups.items()}
-    out = root / "preds" / f"zeroshot-{task}-{split}{limit or ''}{'' if audio else '-noaudio'}.jsonl"
+    tag = ("" if audio else "-noaudio") + ("" if wording == "canonical" else f"-{wording}")
+    out = root / "preds" / f"zeroshot-{task}-{split}{limit or ''}{tag}.jsonl"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("".join(json.dumps(r) + "\n" for r in rows))
     data_vol.commit()
@@ -141,5 +142,6 @@ def run(task: str, split: str, limit: int, audio: bool = True) -> dict:
 
 
 @app.local_entrypoint()
-def zero_shot(task: str = "vf", split: str = "val", limit: int = 300, audio: bool = True):
-    print(json.dumps(run.remote(task, split, limit, audio), indent=1, default=float))
+def zero_shot(task: str = "vf", split: str = "val", limit: int = 300, audio: bool = True,
+              wording: str = "canonical"):
+    print(json.dumps(run.remote(task, split, limit, audio, wording), indent=1, default=float))

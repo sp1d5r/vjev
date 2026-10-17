@@ -3,6 +3,7 @@
     modal run vjev/predict.py::predict_ckpt --run pilot-omni-av-10k --split val --limit 500
 
 Writes /data/preds/{run}-{split}{limit}.jsonl with the per-clip predictions.
+`--wording heldout` asks every question in a wording never trained on.
 `--task` scores a different task than the run trained on (for example `vfai`, the
 cross-dataset real-or-AI test), and adds it to the file name.
 
@@ -23,7 +24,7 @@ from vjev.common import DATA, HF, app, data_vol, hf_vol, train_image
 @app.function(image=train_image, gpu="H200", volumes={DATA: data_vol, HF: hf_vol},
               secrets=[modal.Secret.from_name("huggingface")], timeout=4 * 3600, cpu=12,
               memory=65536)
-def predict(run: str, split: str, limit: int, task: str = "") -> dict:
+def predict(run: str, split: str, limit: int, task: str = "", wording: str = "canonical") -> dict:
     import torch
     from huggingface_hub import snapshot_download
     from peft import set_peft_model_state_dict
@@ -33,6 +34,7 @@ def predict(run: str, split: str, limit: int, task: str = "") -> dict:
 
     root = pathlib.Path(DATA)
     tag = f"-{task}" if task else ""  # a task other than the one the run trained on
+    tag += f"-{wording}" if wording != "canonical" else ""
     out = root / "preds" / f"{run}{tag}-{split}{limit or ''}.jsonl"
     if split == "test" and out.exists():
         raise RuntimeError(f"{out} exists; test is scored once per final model")
@@ -46,8 +48,9 @@ def predict(run: str, split: str, limit: int, task: str = "") -> dict:
 
     edges = json.loads((root / "index" / "meta.json").read_text())["level_edges"]
     task = task or cfg.get("task", "snapugc")
-    recs = _records(split, limit, cfg["seed"], task)
-    loader = _loader(ClipDataset(recs, edges, path, cfg["audio"], task), shuffle=False, workers=8)
+    recs = _records(split, limit, cfg["seed"], task, "", cfg.get("held_out", False))
+    loader = _loader(ClipDataset(recs, edges, path, cfg["audio"], task, wording), shuffle=False,
+                     workers=8)
     res, rows = evaluate(net, loader, edges, task=task)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("".join(json.dumps(r) + "\n" for r in rows))
@@ -58,7 +61,7 @@ def predict(run: str, split: str, limit: int, task: str = "") -> dict:
 
 @app.local_entrypoint()
 def predict_ckpt(run: str, split: str = "val", limit: int = 500, final: bool = False,
-                 task: str = ""):
+                 task: str = "", wording: str = "canonical"):
     if split == "test" and not final:
         raise SystemExit("test is touched once per final model; pass --final to mean it")
-    print(json.dumps(predict.remote(run, split, limit, task), indent=2))
+    print(json.dumps(predict.remote(run, split, limit, task, wording), indent=2))

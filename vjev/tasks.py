@@ -11,6 +11,8 @@ and `noul` questions, and a distribution over time bins for `moment` questions.
     fq       moment (moment, one option per 1 s)            FunQA, funny / creative / magic moment
     vfai     ai_generated (noul) on VideoFeedback clips     cross-dataset test for gv
     vs       sound (choice, 8 people sounds)                VGGSound, the clean audio test
+    fqc      FunQA creative moments only                    held-out question family (G4)
+    vsl      laughing (noul) on VGGSound clips              a question never trained on (G4)
 """
 
 from __future__ import annotations
@@ -24,9 +26,22 @@ from vjev.questions import VF_QUESTIONS, record_for, vf_record
 
 # Decode settings per task: (fps, uses audio). They must match how the clips were decoded.
 TASKS = {"snapugc": (2.0, True), "vf": (8.0, False), "gv": (8.0, False), "qv": (1.0, True),
-         "fq": (2.0, True), "vfai": (8.0, False), "vs": (2.0, True)}
+         "fq": (2.0, True), "vfai": (8.0, False), "vs": (2.0, True), "fqc": (2.0, True),
+         "vsl": (2.0, True)}
 # Tasks that reuse another task's index: vfai asks GenVideo's question of VideoFeedback clips.
-INDEX_OF = {"vfai": "vf"}
+INDEX_OF = {"vfai": "vf", "fqc": "fq", "vsl": "vs"}
+# G4 holds out FunQA's creative moments (C1) from training and asks them as `fqc`.
+HELD_OUT_KIND = "C1"
+LAUGH = {"people belly laughing", "people giggling", "baby laughter"}
+
+
+def keep(task: str, rec: dict, held_out: bool) -> bool:
+    """Whether an index row belongs to `task`. With held_out, `fq` drops the creative clips."""
+    if task == "fqc":
+        return rec["kind"] == HELD_OUT_KIND
+    if task == "fq" and held_out:
+        return rec["kind"] != HELD_OUT_KIND
+    return True
 # Real-or-AI tasks see the same length, shape and size for every clip. In GenVideo every real
 # clip is 640x360, 24 fps and 10 s, and every generated clip is shorter and differently sized,
 # so without this the answer can be read off the clip length or aspect ratio.
@@ -75,9 +90,21 @@ def task_of(rec: dict, default: str) -> str:
 
 
 def make_item(task: str, rec: dict, n_frames: int, duration: float, edges: list[float],
-              audio: bool = True) -> Item:
+              audio: bool = True, wording_mode: str = "canonical", rng=None) -> Item:
+    """wording_mode: canonical, train (random trained rewording) or heldout (unseen rewording),
+    see `vjev/wordings.py`."""
+    import copy
+
+    from vjev.wordings import wording
+
     item = _make_item(task, rec, n_frames, duration, edges, audio)
     item.task = task
+    if wording_mode != "canonical":
+        item.record = copy.deepcopy(item.record)
+        for q, question in item.record["questions"].items():
+            text = wording(task, q, rec, wording_mode, rng)
+            if text:
+                question["instructions"] = text
     return item
 
 
@@ -115,7 +142,7 @@ def _make_item(task: str, rec: dict, n_frames: int, duration: float, edges: list
         return Item(record, fps, use_audio, {"moment": target}, {"moment": "moment"},
                     {"moment": {"saliency": saliency, "windows": rec["windows"],
                                 "bin_s": bins[0][1] - bins[0][0] if bins else 2.0}})
-    if task == "fq":
+    if task in ("fq", "fqc"):
         import hashlib
 
         from vjev.model import moment_bins
@@ -139,6 +166,12 @@ def _make_item(task: str, rec: dict, n_frames: int, duration: float, edges: list
         # choice options are sorted by key, so the target is the label's rank in that order.
         return Item(record, fps, use_audio, {"sound": sorted(CLASSES).index(rec["label"])},
                     {"sound": "choice"}, {"sound": {}})
+    if task == "vsl":
+        record = {"state": {}, "questions": {"laughing": {
+            "type": "noul", "instructions": "Can you hear someone laughing in this clip?",
+            "criteria": {"true": "yes, someone laughs", "false": "no laughter"}}}}
+        return Item(record, fps, use_audio, {"laughing": 0 if rec["label"] in LAUGH else 1},
+                    {"laughing": "noul"}, {"laughing": {}})
     raise ValueError(f"unknown task {task}")
 
 
