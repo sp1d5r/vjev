@@ -1,0 +1,9 @@
+{"state": {},
+ "questions": {
+  "funny_moment": {"type": "moment", "instructions": "When is the funniest moment in this video?"},
+  "laugh": {"type": "noul", "instructions": "Can you hear someone laughing in this clip?",
+            "criteria": {"true": "yes, someone laughs", "false": "no laughter"}},
+  "ai": {"type": "noul", "instructions": "Is this clip AI-generated, as opposed to real footage?",
+         "criteria": {"true": "AI-generated", "false": "real camera footage"}},
+  "quality": {"type": "score", "instructions": "Rate how clean and sharp this video looks: resolution, colour and lack of artifacts.",
+              "criteria": ["bad", "average", "good", "perfect"]}}}

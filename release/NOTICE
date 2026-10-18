@@ -1,0 +1,7 @@
+Video Jev
+Copyright 2026 the Video Jev authors. Weights licensed CC BY-NC-SA 4.0.
+
+vjev/clef_schema.py is vendored unchanged from https://huggingface.co/Cloudflare/clef-flash
+(joint_schema_model.py). Copyright Cloudflare, Inc. Licensed under the Apache License, Version 2.0.
+
+Base model: Qwen/Qwen3-Omni-30B-A3B-Instruct, Apache License, Version 2.0 (not included).
