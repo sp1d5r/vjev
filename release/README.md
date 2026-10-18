@@ -34,8 +34,10 @@ You write questions as a Jev record, and one forward pass answers all of them.
 For `moment` questions, each second of video is an answer option, scored on that second's own video and audio tokens.
 There is no detector and no generated timestamp text.
 
+Built by [Retina](https://retina.dev/coeus).
+Code and working paper: [github.com/sp1d5r/vjev](https://github.com/sp1d5r/vjev).
+
 **Status:** research release, one training seed, non-commercial use only.
-A working paper with the full method and every experiment is in the source repository.
 
 ## Quick start
 
@@ -135,3 +137,7 @@ The base model is Apache 2.0; its licence and notices apply to it.
 ## Citation
 
 Please cite the datasets above, Qwen3-Omni, and Clef. A paper citation will be added when it is out.
+
+## About
+
+Video Jev is made by [Retina](https://retina.dev/coeus). Learn more at [retina.dev/coeus](https://retina.dev/coeus).

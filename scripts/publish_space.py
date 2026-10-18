@@ -2,6 +2,7 @@
 
     uv run modal run scripts/publish_space.py              # upload and request ZeroGPU
     uv run modal run scripts/publish_space.py --logs run   # or build; status only: --logs none
+    uv run modal run scripts/publish_space.py --card       # model card only
 
 The HF token lives in the Modal secret "huggingface", so this runs there.
 """
@@ -29,7 +30,10 @@ def publish(files: dict[str, bytes]) -> dict:
     from huggingface_hub import CommitOperationAdd, HfApi
 
     api = HfApi()
-    api.create_repo(SPACE, repo_type="space", space_sdk="gradio", private=False, exist_ok=True)
+    # Ask for ZeroGPU at creation: free accounts may host ZeroGPU Spaces, but not cpu-basic
+    # Gradio Spaces (402 without PRO).
+    api.create_repo(SPACE, repo_type="space", space_sdk="gradio", space_hardware="zero-a10g",
+                    private=False, exist_ok=True)
     api.create_commit(SPACE, repo_type="space", commit_message="Update demo",
                       operations=[CommitOperationAdd(k, v) for k, v in files.items()])
     try:
@@ -66,8 +70,20 @@ def space_logs(kind: str) -> dict:
     return out
 
 
+@app.function(image=image, secrets=[modal.Secret.from_name("huggingface")], timeout=300)
+def model_card(card: bytes) -> str:
+    from huggingface_hub import HfApi
+
+    info = HfApi().upload_file(path_or_fileobj=card, path_in_repo="README.md",
+                               repo_id="sp1d5r/video-jev", commit_message="Update model card")
+    return str(info)
+
+
 @app.local_entrypoint()
-def main(logs: str = ""):
+def main(logs: str = "", card: bool = False):
+    if card:  # only the model card: release/README.md -> sp1d5r/video-jev
+        print(model_card.remote((ROOT / "release" / "README.md").read_bytes()))
+        return
     if logs:
         print(json.dumps(space_logs.remote(logs), indent=1))
         return
