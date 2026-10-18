@@ -1,0 +1,10 @@
+torch==2.11.0
+torchvision
+transformers==5.10.2
+accelerate
+peft
+safetensors
+huggingface_hub
+pillow
+numpy>=2.0
+spaces
