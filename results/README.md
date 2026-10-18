@@ -7,6 +7,65 @@ They are not comparable to the VQualA 2025 leaderboard, whose test labels are wi
 
 ---
 
+## 2026-10-18 · G4 · One joint model on five tasks, scored once on every test split
+
+**Question:** can one set of weights answer score, yes/no, choice and moment questions across tasks, and does it follow questions it was never trained on?
+
+**Setup:** `g4-joint`. Only data with a stated licence (SnapUGC and GenVideo have none, so they are left out of the release model).
+VideoFeedback 10,000 clips (5 scores) + VideoFeedback real-or-AI 2,000 clips (matched input), QVHighlights all 6,862 queries, FunQA funny and magic clips (creative held out), VGGSound all 5,506 clips.
+26,564 clips, 1 epoch (3,348 steps, 10.0 h), LoRA LR 3e-5, head LR 1e-4.
+Every question is asked in one of three wordings at random during training (`vjev/wordings.py`); two more wordings per question are kept for testing.
+Checkpoint: best val (step 3,200).
+Each test split scored once (`predict_ckpt ... --split test --final`), with untrained Qwen3-Omni (`zeroshot.py`) and the single-task runs on the same clips.
+
+**Results** (official test splits)
+
+| Task (test clips) | Metric | Untrained Omni | Single-task | **G4 joint** | Reference |
+|---|---|---|---|---|---|
+| VideoFeedback quality (760) | mean Spearman | 0.340 | 0.775 (G0, 35k clips) | 0.743 (10k clips) | VideoScore 0.771 |
+| VideoFeedback real or AI (760) | AUC | 0.905 | - | **0.996** | - |
+| GenVideo real or AI (961), never trained on | AUC | - | - | **0.942** | G1a trained on GenVideo: 0.997 val |
+| QVHighlights (1,550) | R1@0.5 / R1@0.7 / mIoU | 0.528 / 0.354 / 0.515 | - | **0.679 / 0.463 / 0.601** | Moment-DETR val 53.9 / 34.8 |
+| QVHighlights | HIT@1 / mAP avg | 0.181 / 0.043 | - | 0.358 / 0.055 | Moment-DETR val 55.6 HIT@1, 30.7 mAP (test) |
+| FunQA funny + magic (339) | HIT@1 / R1@0.5 | 0.504 / 0.398 | 0.767 / 0.507 (G3a) | **0.776** / 0.504 | - |
+| VGGSound people sounds (398) | accuracy | 0.503 | 0.598 (G3c) | 0.590 | chance 0.125 |
+
+VideoFeedback per question (G4, Spearman): visual quality 0.822, temporal 0.786, dynamic 0.694, text alignment 0.599, factual 0.813.
+Calibration (ECE): 0.031 to 0.045 for VideoFeedback, 0.023 for real-or-AI, 0.157 for VGGSound; untrained Omni 0.29 to 0.56 on VideoFeedback.
+
+**Generality tests**
+
+| Test | G4 | Untrained Omni |
+|---|---|---|
+| All questions in wordings never trained on (mean final) | 0.728, against 0.730 with trained wordings | - |
+| "Can you hear someone laughing?", a question never trained on (VGGSound test, AUC) | **0.970** | 0.873 |
+| FunQA creative moments, held-out family (HIT@1) | 0.000 | 0.635 |
+
+The creative-moment test is void: every creative answer window in FunQA starts within the first 3 seconds, so it measures position, not content (the single-task model, trained on them, scores 1.000).
+
+**Long video** (`vjev/longvideo.py`, 60 val videos per length: one FunQA moment hidden among VGGSound speech and crowd clips, 60 s windows, 30 s stride)
+
+| Length | HIT@1 | HIT@3 | Chance | Time on one H200 |
+|---|---|---|---|---|
+| 1 min | 0.32 | 0.42 | 0.08 | 2.2 s |
+| 3 min | 0.23 | 0.25 | 0.03 | 6.6 s |
+| 5 min | 0.18 | 0.23 | 0.018 | 11.0 s |
+| 10 min | 0.13 | 0.20 | 0.009 | 22.5 s |
+
+**What we learned**
+
+- One model answers all four question types. QVHighlights went from our weakest task to a clear win once it had full data: R1@0.5 0.679 against 0.528 untrained, above Moment-DETR's published 53.9 on the same split. Our span ranking is weak, so mAP is low.
+- Joint training cost little where data was equal: FunQA +0.009, VGGSound -0.008. VideoFeedback is 0.032 below G0, which saw 3.5 times more VideoFeedback clips; the 0.02 gate fails there.
+- New wordings cost nothing (0.728 against 0.730), and a never-trained yes/no question works (AUC 0.970 against 0.873).
+- Real-or-AI trained on VideoFeedback transfers to GenVideo's unseen generators (0.942).
+- VGGSound test is far below its val (0.59 against 0.82) for every model, including the untrained one (0.50 against 0.66): the official test clips are harder.
+- Long video works but degrades: at 10 minutes the right second is found 13% of the time, 15 times chance. A 10-minute video takes 22.5 s.
+- One seed.
+
+**Cost:** about $50 training, about $17 test scoring and baselines, $2 lost to two runs killed by a dropped client (now launched on a deployed app).
+
+---
+
 ## 2026-10-17 · G0 test · VideoFeedback official test split, scored once
 
 **Setup:** `predict_ckpt --run g0-vf-full --split test --limit 0 --final`, checkpoint from step 4,000 (best val).

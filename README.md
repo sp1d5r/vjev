@@ -38,8 +38,8 @@ Val numbers; details in [results/README.md](results/README.md).
 | QVHighlights, small run (G2a) | moment | 0.539 R1@0.5 | 0.264 R1@0.5 | needs the full run |
 | VGGSound people sounds (G3c) | choice | 0.659 acc | 0.817 acc (0.753 without audio) | chance 0.125 |
 | GenVideo real or AI (G1a) | yes/no | 0.736 AUC | 0.997 AUC | CLIP 0.997 |
-| Joint model, held-out wordings (G4) | all | | planned | |
-| Long video (G5) | all | | planned | |
+| **Joint model G4 (test)**: VideoFeedback / QVHighlights R1@0.5 / FunQA HIT@1 / VGGSound / real-or-AI AUC | all | 0.340 / 0.528 / 0.504 / 0.503 / 0.905 | 0.743 / 0.679 / 0.776 / 0.590 / 0.996 | unseen wordings: no drop; new laughing question AUC 0.970 |
+| Long video, 10 min (G5 small test) | moment | | HIT@1 0.13 (chance 0.009) | 22.5 s per 10 min video |
 
 Related work: [docs/related_work.md](docs/related_work.md).
 
