@@ -36,6 +36,7 @@ There is no detector and no generated timestamp text.
 
 Built by [Retina](https://retina.dev/coeus).
 Code and working paper: [github.com/sp1d5r/vjev](https://github.com/sp1d5r/vjev).
+ComfyUI nodes: [github.com/sp1d5r/ComfyUI-VideoJev](https://github.com/sp1d5r/ComfyUI-VideoJev).
 
 **Status:** research release, one training seed, non-commercial use only.
 
