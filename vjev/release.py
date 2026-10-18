@@ -72,6 +72,15 @@ def load_release(release_dir: str, base_path: str):
     return net.eval(), proc
 
 
+@app.function(image=train_image, secrets=[modal.Secret.from_name("huggingface")], timeout=300)
+def hf_whoami() -> dict:
+    from huggingface_hub import HfApi
+
+    me = HfApi().whoami()
+    return {"name": me.get("name"), "orgs": [o.get("name") for o in me.get("orgs", [])],
+            "token_role": me.get("auth", {}).get("accessToken", {}).get("role")}
+
+
 @app.local_entrypoint()
 def export(run: str):
     print(json.dumps(export_run.remote(run), indent=1))

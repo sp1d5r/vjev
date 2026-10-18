@@ -70,7 +70,9 @@ def answer(video: bytes, record: dict, release: str, fps: float, seconds: int,
             result[name] = [{"from_s": round(float(i * step), 1), "to_s": round(float((i + 1) * step), 1),
                              "p": round(float(p[i]), 3)} for i in top]
         else:
-            labels = [str(label) for label, _ in cs.question_options(q)]
+            # Scores are listed by their level text; yes/no and choices by their keys.
+            labels = [str(text if q["type"] == "score" else key)
+                      for key, text in cs.question_options(q)]
             result[name] = {label: round(float(x), 3) for label, x in zip(labels, p, strict=True)}
     return {"answers": result, "frames": len(frames), "forward_ms": round(ms)}
 
