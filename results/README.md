@@ -26,7 +26,7 @@ Each test split scored once (`predict_ckpt ... --split test --final`), with untr
 | VideoFeedback real or AI (760) | AUC | 0.905 | - | **0.996** | - |
 | GenVideo real or AI (961), never trained on | AUC | - | - | **0.942** | G1a trained on GenVideo: 0.997 val |
 | QVHighlights (1,550) | R1@0.5 / R1@0.7 / mIoU | 0.528 / 0.354 / 0.515 | - | **0.679 / 0.463 / 0.601** | Moment-DETR val 53.9 / 34.8 |
-| QVHighlights | HIT@1 / mAP avg | 0.181 / 0.043 | - | 0.358 / 0.055 | Moment-DETR val 55.6 HIT@1, 30.7 mAP (test) |
+| QVHighlights | HIT@1 / mAP avg | 0.181 / 0.043 | - | 0.358 / 0.055 | Moment-DETR val 55.55 HIT@1, 32.20 mAP avg |
 | FunQA funny + magic (339) | HIT@1 / R1@0.5 | 0.504 / 0.398 | 0.767 / 0.507 (G3a) | **0.776** / 0.504 | - |
 | VGGSound people sounds (398) | accuracy | 0.503 | 0.598 (G3c) | 0.590 | chance 0.125 |
 
@@ -54,7 +54,7 @@ The creative-moment test is void: every creative answer window in FunQA starts w
 
 **What we learned**
 
-- One model answers all four question types. QVHighlights went from our weakest task to a clear win once it had full data: R1@0.5 0.679 against 0.528 untrained, above Moment-DETR's published 53.9 on the same split. Our span ranking is weak, so mAP is low.
+- One model answers all four question types. QVHighlights went from our weakest task to a clear win once it had full data: R1@0.5 0.679 against 0.528 untrained, above Moment-DETR's published 53.94 on the same split (QVHighlights supplementary, 10 queries). Newer dedicated models report more, and our span ranking is weak, so mAP is far lower (0.055 against 32.20).
 - Joint training cost little where data was equal: FunQA +0.009, VGGSound -0.008. VideoFeedback is 0.032 below G0, which saw 3.5 times more VideoFeedback clips; the 0.02 gate fails there.
 - New wordings cost nothing (0.728 against 0.730), and a never-trained yes/no question works (AUC 0.970 against 0.873).
 - Real-or-AI trained on VideoFeedback transfers to GenVideo's unseen generators (0.942).

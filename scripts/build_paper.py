@@ -44,7 +44,7 @@ tasks = [
     ("Funny moment", "FunQA · val · HIT@1", 0.545, 0.807, (0.533, "position prior")),
     ("Which sound", "VGGSound · val · accuracy", 0.659, 0.817, (0.125, "chance")),
     ("Real or AI, new sources", "VideoFeedback · val · AUC", 0.916, 0.929, (0.934, "CLIP + MLP")),
-    ("Text-query moment", "QVHighlights · val · R1@0.5", 0.539, 0.264, (0.121, "uniform")),
+    ("Text-query moment", "QVHighlights · G4 · R1@0.5", 0.528, 0.679, (0.539, "Moment-DETR")),
 ]
 chart_tasks = hbars(
     [(n, sub, [(z, ZS, f3(z)), (o, ACC, f3(o)), (r, REF, f"{f3(r)} {rn}")]) for n, sub, z, o, (r, rn) in tasks],
@@ -162,30 +162,31 @@ svg text { font-family: "IBM Plex Sans", sans-serif; }
 """
 
 BODY = f"""
-<div class="label">Working paper · draft of 17 October 2026 · not peer reviewed</div>
+<div class="label">Working paper · draft of 18 October 2026 · not peer reviewed</div>
 <h1>Video Jev: one calibrated head for typed questions about video and sound</h1>
 <p class="sub">Ask a video a typed question: yes or no, pick one, score it, or "when?". Get back a probability for every possible answer. Many questions in one pass.</p>
-<div class="meta"><span>Backbone: Qwen3-Omni-30B-A3B (Apache 2.0)</span><span>Compute: Modal, 1 × H200</span><span>Spend to date: $250 billed</span><span>Code: multimodal-jev</span></div>
+<div class="meta"><span>Backbone: Qwen3-Omni-30B-A3B (Apache 2.0)</span><span>Compute: Modal, 1 × H200</span><span>Spend to date: $337 billed</span><span>Weights: huggingface.co/sp1d5r/video-jev</span><span>Code: multimodal-jev</span></div>
 
 <div class="box">
 <div class="label">Summary</div>
 <ul>
 <li><b>What it is.</b> We add a small trained head to an open audio-visual model, Qwen3-Omni. The head reads questions written in Jev form and returns a calibrated probability for every allowed answer. One model, one forward pass, many questions.</li>
-<li><b>What works.</b> On five tasks, training lifts the same model far above its untrained self. It matches specialist systems on two of them.</li>
+<li><b>One model for everything.</b> A single set of weights (G4) answers score, yes/no, choice and moment questions across five tasks, follows wordings it never saw, and answers a yes/no question it was never trained on (AUC 0.970 against 0.873 untrained).</li>
 <li><b>Engagement (SnapUGC):</b> 0.709 on held-out test, level with the 2025 challenge winner's 4-model ensemble (0.710, different split).</li>
 <li><b>AI-video quality (VideoFeedback):</b> 0.775 average Spearman on the official test split, against VideoScore's 0.771. Ahead on 3 of 5 questions, from a general recipe with no task tuning.</li>
 <li><b>"When" questions:</b> a new <code>moment</code> type, with no new parts, finds the funny moment in FunQA 81% of the time, against 53% for the best blind guess.</li>
 <li><b>Sound:</b> on "which sound is this?", audio adds 6.4 points and cuts calibration error by 64%.</li>
-<li><b>What does not work yet.</b> Text-query moments on QVHighlights: a small run is behind the untrained model on spans. Real-or-AI ties a CLIP baseline on old generators.</li>
-<li><b>The ask.</b> About $150 trains one joint model on all tasks, tests it on question wordings it never saw, scores it once on every test split, and releases it on Hugging Face for non-commercial use.</li>
+<li><b>Text-query moments:</b> QVHighlights R1@0.5 0.679 on its val split, against 0.528 untrained and 0.539 for Moment-DETR.</li>
+<li><b>What does not work yet.</b> Span ranking (mAP) on QVHighlights; modern AI-video detection; long videos lose accuracy with length (13% at 10 minutes, 15 times chance).</li>
+<li><b>Released.</b> The joint model is on Hugging Face (CC BY-NC-SA 4.0), trained only on datasets with a stated licence. $87 of the $150 was spent.</li>
 </ul>
 </div>
 
 <div class="kpis">
 <div class="kpi"><div class="v">0.709</div><div class="k">Engagement, test<br>2025 winner: 0.710</div></div>
 <div class="kpi"><div class="v">0.775</div><div class="k">AI-video quality, test<br>VideoScore: 0.771</div></div>
-<div class="kpi"><div class="v">+27 pts</div><div class="k">Funny moment HIT@1<br>over best blind guess</div></div>
-<div class="kpi"><div class="v">0.02 to 0.06</div><div class="k">Calibration error (ECE)<br>untrained: 0.18 to 0.56</div></div>
+<div class="kpi"><div class="v">0.679</div><div class="k">Text-query moment R1@0.5<br>untrained: 0.528</div></div>
+<div class="kpi"><div class="v">0.970</div><div class="k">Never-trained question, AUC<br>untrained: 0.873</div></div>
 </div>
 
 <h2>1. What we are building</h2>
@@ -246,7 +247,46 @@ one forward pass, about 0.2 s on one H200</pre>
 
 <h2>3. Results</h2>
 <figure>{chart_tasks}
-<figcaption>Every task on one 0 to 1 scale, each with its own metric. "No training" is the same Qwen3-Omni asked the question as text, reading the probability of each answer word (SnapUGC uses untrained Clef-flash). SnapUGC and VideoFeedback on test; the rest on val. QVHighlights is a small run on a third of the training data.</figcaption></figure>
+<figcaption>Every task on one 0 to 1 scale, each with its own metric. "No training" is the same Qwen3-Omni asked the question as text, reading the probability of each answer word (SnapUGC uses untrained Clef-flash). SnapUGC and VideoFeedback on test; the rest on val. QVHighlights is the joint model (G4) on its official val split, 1,550 queries.</figcaption></figure>
+
+<h3>3.0 One model for every question type (G4, the release model)</h3>
+<p>One set of weights, trained once on five tasks with every question asked in three wordings. Official test splits, each scored once. Single-task runs and untrained Omni are scored on the same clips.</p>
+<table>
+<tr><th>Task (test clips)</th><th>Metric</th><th class="n">Untrained</th><th class="n">Single-task</th><th class="n">Joint (G4)</th><th>Reference</th></tr>
+<tr><td>AI-video quality (760)</td><td>mean Spearman</td><td class="n">0.340</td><td class="n">0.775</td><td class="n">0.743</td><td>VideoScore 0.771</td></tr>
+<tr><td>Real or AI, VideoFeedback (760)</td><td>AUC</td><td class="n">0.905</td><td class="n">-</td><td class="n">0.996</td><td>-</td></tr>
+<tr><td>Real or AI, GenVideo, never trained on (961)</td><td>AUC</td><td class="n">-</td><td class="n">-</td><td class="n">0.942</td><td>-</td></tr>
+<tr class="us"><td>Text-query moment, QVHighlights (1,550)</td><td>R1@0.5 / R1@0.7</td><td class="n">0.528 / 0.354</td><td class="n">-</td><td class="n">0.679 / 0.463</td><td>Moment-DETR 0.539 / 0.348</td></tr>
+<tr><td>Funny and magic moment, FunQA (339)</td><td>HIT@1</td><td class="n">0.504</td><td class="n">0.767</td><td class="n">0.776</td><td>-</td></tr>
+<tr><td>Which sound, VGGSound (398)</td><td>accuracy</td><td class="n">0.503</td><td class="n">0.598</td><td class="n">0.590</td><td>chance 0.125</td></tr>
+</table>
+<p class="note">QVHighlights "test" is its official val split; Moment-DETR numbers are its published val result. Our mAP is far lower (0.055 against 0.322): the span ranking is weak. VGGSound's official test is much harder than its val for every model (untrained 0.50 against 0.66).</p>
+<div class="two">
+<div>
+<table>
+<tr><th>Generality test</th><th class="n">Joint</th><th class="n">Untrained</th></tr>
+<tr><td>Every question in 2 wordings never trained on (trained wordings: 0.730)</td><td class="n">0.728</td><td class="n">-</td></tr>
+<tr class="us"><td>"Can you hear someone laughing?", never trained (AUC)</td><td class="n">0.970</td><td class="n">0.873</td></tr>
+<tr><td>FunQA creative moments, held out</td><td class="n">void</td><td class="n">void</td></tr>
+</table>
+<p class="note">The creative-moment test is void: every answer window in that FunQA subset starts in the first 3 s, so it measures position, not content.</p>
+</div>
+<div>
+<table>
+<tr><th>Long video (60 per length)</th><th class="n">HIT@1</th><th class="n">Chance</th><th class="n">Time</th></tr>
+<tr><td>1 min</td><td class="n">0.32</td><td class="n">0.08</td><td class="n">2.2 s</td></tr>
+<tr><td>3 min</td><td class="n">0.23</td><td class="n">0.03</td><td class="n">6.6 s</td></tr>
+<tr><td>5 min</td><td class="n">0.18</td><td class="n">0.018</td><td class="n">11.0 s</td></tr>
+<tr><td>10 min</td><td class="n">0.13</td><td class="n">0.009</td><td class="n">22.5 s</td></tr>
+</table>
+<p class="note">One FunQA moment hidden among speech and crowd clips; 60 s windows, 30 s overlap, one H200.</p>
+</div>
+</div>
+<ul>
+<li><b>One model answers all four question types.</b> Joint training cost almost nothing where data was equal (FunQA +0.009, VGGSound -0.008). VideoFeedback is 0.032 below the single-task model, which saw 3.5 times more of its clips.</li>
+<li><b>QVHighlights went from our weakest task to a clear win</b> once it had full data: R1@0.5 0.679 against 0.528 untrained.</li>
+<li><b>The head follows the question, not just the task:</b> new wordings cost nothing, and a never-trained yes/no question beats the untrained model (0.970 against 0.873).</li>
+</ul>
 
 <h3>3.1 Engagement: SnapUGC (test, 1,736 clips, scored once)</h3>
 <div class="two">
@@ -298,8 +338,9 @@ one forward pass, about 0.2 s on one H200</pre>
 <tr><td>Uniform guess</td><td class="n">0.089</td><td class="n">0.121</td><td class="n">0.263</td></tr>
 <tr><td>Untrained Omni (text answer)</td><td class="n">0.195</td><td class="n">0.539</td><td class="n">0.520</td></tr>
 <tr><td>Ours, small run (2k queries)</td><td class="n">0.213</td><td class="n">0.264</td><td class="n">0.264</td></tr>
+<tr class="us"><td>Ours, joint model G4 (all queries, 1,550 test)</td><td class="n">0.358</td><td class="n">0.679</td><td class="n">0.601</td></tr>
 </table>
-<p class="note">Text queries like "a woman walks her dog". The untrained model was likely trained on this kind of data already. Ours finds the right second a little more often but draws spans that are too wide.</p>
+<p class="note">Text queries like "a woman walks her dog". The untrained model was likely trained on this kind of data already. The small run was undertrained; with all the training data (G4) it clearly beats the untrained model.</p>
 </div>
 </div>
 
@@ -347,21 +388,22 @@ one forward pass, about 0.2 s on one H200</pre>
 <tr><td>SnapUGC</td><td>Engagement</td><td><span class="tag ok">done, parked</span></td><td>0.709 test; 3 seeds later</td></tr>
 <tr><td>G0</td><td>AI-video quality</td><td><span class="tag ok">done</span></td><td>0.775 test, VideoScore 0.771</td></tr>
 <tr><td>G1</td><td>Real or AI</td><td><span class="tag mid">done, tie</span></td><td>Ties CLIP; old generators too easy</td></tr>
-<tr><td>G2</td><td>Text-query moments</td><td><span class="tag mid">small run only</span></td><td>Behind untrained model on spans</td></tr>
+<tr><td>G2</td><td>Text-query moments</td><td><span class="tag ok">done in G4</span></td><td>R1@0.5 0.679, untrained 0.528</td></tr>
 <tr><td>G3</td><td>Funny moments, sound</td><td><span class="tag ok">done</span></td><td>0.807 HIT@1; audio +6.4 pts</td></tr>
-<tr><td>G4</td><td>One joint model, unseen questions</td><td><span class="tag no">not started</span></td><td>The main result. Needs the $150.</td></tr>
-<tr><td>G5</td><td>Long video</td><td><span class="tag no">not started</span></td><td>After release</td></tr>
+<tr><td>G4</td><td>One joint model, unseen questions</td><td><span class="tag ok">done, released</span></td><td>All tasks in one model; new wordings free</td></tr>
+<tr><td>G5</td><td>Long video</td><td><span class="tag mid">small test</span></td><td>10 min: 13% HIT@1, 15x chance</td></tr>
 </table>
 
-<h3>Spend so far: $250 billed</h3>
+<h3>Spend so far: $337 billed</h3>
 <div class="two">
 <div>
 <table>
 <tr><th>Item</th><th class="n">Approx. cost</th></tr>
 <tr><td>SnapUGC: data, pilot, failed runs, full run, test</td><td class="n">$157</td></tr>
 <tr><td>Generalisation G0 to G3, zero-shot baselines</td><td class="n">$62</td></tr>
+<tr><td>G4 joint model, test scoring, baselines, long video, release (the $150)</td><td class="n">$87</td></tr>
 <tr><td>Storage (volumes: videos, caches, checkpoints)</td><td class="n">$32</td></tr>
-<tr><td><b>Billed total</b> (after $30 credit and free storage)</td><td class="n"><b>$250</b></td></tr>
+<tr><td><b>Billed total</b> (after $30 credit and free storage)</td><td class="n"><b>$337</b></td></tr>
 </table>
 </div>
 <div>
@@ -370,18 +412,18 @@ one forward pass, about 0.2 s on one H200</pre>
 </div>
 </div>
 
-<h2>6. What $150 gets you</h2>
-<p>One released model that answers all of these question types, with honest test numbers and a clear statement of what it cannot do.</p>
+<h2>6. What the $150 bought</h2>
+<p>The plan below was written before the results. Actual cost: $87.</p>
 <table>
 <tr><th>#</th><th>Step</th><th class="n">Cost</th><th>What you get</th><th>Gate (decided before results)</th></tr>
 <tr><td>1</td><td>Score G0 on the official VideoFeedback test split, once</td><td class="n">done</td><td><b>0.775 against VideoScore's 0.771</b> (paid from the raised limit, 17 Oct)</td><td>-</td></tr>
-<tr><td>2</td><td>Small joint test: all tasks, 10% of data</td><td class="n">$10</td><td>Proof the tasks train together without breaking</td><td>No task falls more than 0.05 below its single-task run.</td></tr>
-<tr><td>3</td><td><b>G4 joint model</b>: VideoFeedback, FunQA, QVHighlights (all of it), VGGSound, real-or-AI, with questions reworded in many ways</td><td class="n">$70 to $90</td><td><b>The release model.</b> One set of weights for score, yes/no, choice and moment questions.</td><td>Within 0.02 of single-task models on VideoFeedback and FunQA.</td></tr>
-<tr><td>4</td><td>Unseen-question test</td><td class="n">in 3</td><td>Evidence the head is general: questions it never trained on</td><td>Beats the untrained model on held-out questions.</td></tr>
-<tr><td>5</td><td>Score every test split once; untrained baseline on the same clips</td><td class="n">$18</td><td>The table on the model card</td><td>-</td></tr>
-<tr><td>6</td><td>Buffer for one rerun</td><td class="n">$25</td><td>Every phase so far needed one</td><td>Unused buffer is not spent.</td></tr>
-<tr><td>7</td><td>Release on Hugging Face</td><td class="n">$0</td><td>LoRA + head (a few hundred MB), loader script, Jev record examples, model card</td><td>Licence check of every dataset first.</td></tr>
-<tr class="us"><td></td><td>Total</td><td class="n">$123 to $143</td><td>Leaves about $7 to $27 of the $150 spare</td><td></td></tr>
+<tr><td>2</td><td>Small joint test: all tasks, 10% of data</td><td class="n">$2</td><td>Killed twice by a dropped client at step 100; every task was learning, so we went straight to the full run</td><td>Replaced by a stop rule at step 800</td></tr>
+<tr><td>3</td><td><b>G4 joint model</b>: VideoFeedback, FunQA, QVHighlights (all of it), VGGSound, real-or-AI, with questions reworded in many ways</td><td class="n">$50</td><td><b>Done.</b> One set of weights for all four question types.</td><td>FunQA <span class="tag ok">pass</span> (+0.009); VideoFeedback <span class="tag no">fail</span> (-0.032, a third of the data)</td></tr>
+<tr><td>4</td><td>Unseen-question test</td><td class="n">in 5</td><td>New wordings: no drop. New laughing question: 0.970 AUC</td><td><span class="tag ok">pass</span>; creative family void</td></tr>
+<tr><td>5</td><td>Score every test split once; untrained baseline on the same clips</td><td class="n">$17</td><td>Section 3.0 and the model card</td><td>-</td></tr>
+<tr><td>6</td><td>Long-video small test, release end-to-end checks</td><td class="n">$3</td><td>Section 3.0; a release verified by running it as a user would</td><td>-</td></tr>
+<tr><td>7</td><td>Release on Hugging Face</td><td class="n">$0</td><td>sp1d5r/video-jev: adapter + head (714 MB), standalone run.py, model card</td><td>SnapUGC and GenVideo left out: no stated licence</td></tr>
+<tr class="us"><td></td><td>Total</td><td class="n">$87 (incl. ~$15 idle storage)</td><td>About $63 of the $150 unspent</td><td></td></tr>
 </table>
 
 <h3>How we test "general"</h3>
@@ -392,11 +434,13 @@ one forward pass, about 0.2 s on one H200</pre>
 </ul>
 
 <div class="box warnbox">
-<div class="label">What $150 does not buy</div>
+<div class="label">Still not done</div>
 <ul>
 <li>More seeds (about $140 for two more), so headline numbers come from one run each.</li>
-<li>A fix for QVHighlights beyond the full-data run. If spans stay wide, we report it as a limit.</li>
-<li>Detection of modern AI video, sports goal timing or long videos. These need data or work we do not have yet.</li>
+<li>Better span ranking on QVHighlights (mAP).</li>
+<li>Detection of modern AI video and sports goal timing: these need data we do not have.</li>
+<li>Long video beyond a small test: accuracy falls with length.</li>
+<li>Engagement in the release: SnapUGC has no stated licence.</li>
 <li>Commercial use. FunQA is CC BY-NC-SA, so the release is non-commercial.</li>
 </ul>
 </div>
@@ -416,7 +460,7 @@ one forward pass, about 0.2 s on one H200</pre>
 <p>Ready means the question type is trained and measured. Partly means one part is shown and the rest needs data. Each use case is a Jev record: you write the questions and get probabilities back.</p>
 <div class="ucs">
 <div class="uc"><h3>Clip finder for creators <span class="tag ok">ready</span></h3>
-<p><q>When is the funniest moment?</q> <q>Will viewers keep watching?</q> Find the best seconds of a long video and rank cuts by likely engagement. This follows directly from the clipping-for-distribution work.</p></div>
+<p><q>When is the funniest moment?</q> <q>Will viewers keep watching?</q> Find the best seconds of a video. Engagement scoring works too (section 3.1), but is not in the release because SnapUGC has no stated licence. This follows directly from the clipping-for-distribution work.</p></div>
 <div class="uc"><h3>Reviewer for AI video <span class="tag ok">ready</span></h3>
 <p><q>Visual quality 1 to 4?</q> <q>Does it match the prompt?</q> <q>Does the physics hold?</q> Score every generation, drop bad takes, and give a generator a reward signal (the generate-then-review loop).</p></div>
 <div class="uc"><h3>Sound-aware tagging <span class="tag ok">ready</span></h3>
@@ -425,8 +469,8 @@ one forward pass, about 0.2 s on one H200</pre>
 <p>Because the probabilities are calibrated, auto-accept above 95%, auto-reject below 5%, and send the rest to a person. A plain classifier cannot set these thresholds safely.</p></div>
 <div class="uc"><h3>Dataset labelling for research <span class="tag ok">ready</span></h3>
 <p>Label a large video set with several typed questions in one pass each. Use the uncertain clips for human labelling next (active learning).</p></div>
-<div class="uc"><h3>Find a moment by text <span class="tag mid">partly</span></h3>
-<p><q>When does the woman open the door?</q> Search inside long videos. The mechanism works; quality on QVHighlights is not there yet.</p></div>
+<div class="uc"><h3>Find a moment by text <span class="tag ok">ready</span></h3>
+<p><q>When does the woman open the door?</q> Search inside videos up to a few minutes. R1@0.5 0.679 on QVHighlights; longer videos lose accuracy.</p></div>
 <div class="uc"><h3>Sports and live events <span class="tag mid">partly</span></h3>
 <p><q>When does the goal go in?</q> <q>Did the crowd cheer?</q> The moment and sound parts both work. It needs labelled match data (SoccerNet needs a signed agreement).</p></div>
 <div class="uc"><h3>Spotting modern AI video <span class="tag no">not yet</span></h3>
@@ -453,7 +497,7 @@ one forward pass, about 0.2 s on one H200</pre>
 <h2>9. Limitations</h2>
 <ul>
 <li><b>One seed per result.</b> We do not yet know the run-to-run spread.</li>
-<li><b>Val, not test, for three tasks.</b> SnapUGC and VideoFeedback are scored on held-out test. Step 5 of the $150 covers the rest.</li>
+<li><b>Engagement is not in the release.</b> SnapUGC has no stated licence; its 0.709 is a separate model.</li>
 <li><b>SnapUGC split differs from the challenge.</b> The official test labels are withheld.</li>
 <li><b>Only 32% of SnapUGC videos are still online,</b> and the deleted ones skew to low engagement.</li>
 <li><b>Short clips.</b> Up to 16 s for engagement and 150 s for QVHighlights. Long video is untested.</li>
