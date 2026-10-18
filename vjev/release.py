@@ -48,14 +48,16 @@ def export_run(run: str) -> dict:
 
 @app.function(image=train_image, volumes={DATA: data_vol},
               secrets=[modal.Secret.from_name("huggingface")], timeout=1800)
-def upload_run(run: str, repo: str, private: bool) -> dict:
+def upload_run(run: str, repo: str, private: bool, path_in_repo: str = "") -> dict:
     from huggingface_hub import HfApi
 
     api = HfApi()
     src = pathlib.Path(DATA) / "release" / run
     api.create_repo(repo, private=private, exist_ok=True)
-    api.upload_folder(repo_id=repo, folder_path=str(src), commit_message=f"Release {run}")
-    return {"repo": repo, "files": sorted(p.name for p in src.iterdir()), "private": private}
+    api.upload_folder(repo_id=repo, folder_path=str(src), path_in_repo=path_in_repo or None,
+                      commit_message=f"Release {run}")
+    return {"repo": repo, "files": sorted(str(p.relative_to(src)) for p in src.rglob("*")),
+            "private": private}
 
 
 def load_release(release_dir: str, base_path: str):
