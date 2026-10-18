@@ -57,7 +57,8 @@ def _moment_probs(reply: str, n_bins: int, bin_s: float) -> np.ndarray:
 @app.function(image=train_image, gpu="H200", volumes={DATA: data_vol, HF: hf_vol},
               secrets=[modal.Secret.from_name("huggingface")],
               timeout=4 * 3600, cpu=12, memory=65536)
-def run(task: str, split: str, limit: int, audio: bool = True, wording: str = "canonical") -> dict:
+def zs_run(task: str, split: str, limit: int, audio: bool = True, wording: str = "canonical",
+           held_out: bool = False) -> dict:
     import torch
     from huggingface_hub import snapshot_download
     from transformers import Qwen3OmniMoeForConditionalGeneration, Qwen3OmniMoeProcessor
@@ -79,7 +80,7 @@ def run(task: str, split: str, limit: int, audio: bool = True, wording: str = "c
 
     groups: dict[str, dict] = {}
     rows = []
-    for rec in _records(split, limit, 0, task):
+    for rec in _records(split, limit, 0, task, "", held_out):
         frames, wav, duration = load(pre_path(root, rec["id"]))
         frames = prepare_frames(task, frames)
         if len(frames) % 2:
@@ -132,6 +133,7 @@ def run(task: str, split: str, limit: int, audio: bool = True, wording: str = "c
     reports = {q: question_report(g["kind"], g["probs"], g["target"], g["extra"])
                for q, g in groups.items()}
     tag = ("" if audio else "-noaudio") + ("" if wording == "canonical" else f"-{wording}")
+    tag += "-noC1" if held_out else ""
     out = root / "preds" / f"zeroshot-{task}-{split}{limit or ''}{tag}.jsonl"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("".join(json.dumps(r) + "\n" for r in rows))
@@ -143,5 +145,6 @@ def run(task: str, split: str, limit: int, audio: bool = True, wording: str = "c
 
 @app.local_entrypoint()
 def zero_shot(task: str = "vf", split: str = "val", limit: int = 300, audio: bool = True,
-              wording: str = "canonical"):
-    print(json.dumps(run.remote(task, split, limit, audio, wording), indent=1, default=float))
+              wording: str = "canonical", held_out: bool = False):
+    print(json.dumps(zs_run.remote(task, split, limit, audio, wording, held_out), indent=1,
+                     default=float))

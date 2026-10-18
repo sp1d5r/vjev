@@ -1,6 +1,6 @@
 """Ask your own typed questions about any video file.
 
-    modal run vjev/infer.py --video clip.mp4 --record questions.json [--release g4-joint]
+    modal run vjev/infer.py::ask --video clip.mp4 --record questions.json [--release g4-joint]
 
 `questions.json` is a Jev record: {"state": {...}, "questions": {name: question}}. Question
 types: "noul" (yes/no), "choice" (named options in "criteria"), "score" (ordered levels in
@@ -76,7 +76,7 @@ def answer(video: bytes, record: dict, release: str, fps: float, seconds: int,
 
 
 @app.local_entrypoint()
-def main(video: str, record: str, release: str = "g4-joint", fps: float = 2.0,
+def ask(video: str, record: str, release: str = "g4-joint", fps: float = 2.0,
          seconds: int = 60, audio: bool = True):
     rec = json.loads(pathlib.Path(record).read_text())
     out = answer.remote(pathlib.Path(video).read_bytes(), rec, release, fps, seconds, audio)

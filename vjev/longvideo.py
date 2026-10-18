@@ -62,7 +62,7 @@ def window_starts(total_s: int) -> list[int]:
 @app.function(image=train_image, gpu="H200", volumes={DATA: data_vol, HF: hf_vol},
               secrets=[modal.Secret.from_name("huggingface")], timeout=4 * 3600, cpu=12,
               memory=65536)
-def run(ckpt_run: str, n: int, minutes: list[int], seed: int = 0) -> dict:
+def lv_run(ckpt_run: str, n: int, minutes: list[int], seed: int = 0) -> dict:
     import time
 
     import torch
@@ -149,8 +149,4 @@ def run(ckpt_run: str, n: int, minutes: list[int], seed: int = 0) -> dict:
 
 @app.local_entrypoint()
 def long_video(run: str = "g3a-fq-av", n: int = 60, minutes: str = "1,3,5,10"):
-    print(json.dumps(run_remote(run, n, minutes), indent=1))
-
-
-def run_remote(ckpt_run: str, n: int, minutes: str) -> dict:
-    return run.remote(ckpt_run, n, [int(m) for m in minutes.split(",")])
+    print(json.dumps(lv_run.remote(run, n, [int(m) for m in minutes.split(",")]), indent=1))
